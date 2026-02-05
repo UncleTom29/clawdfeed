@@ -1,0 +1,204 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/client"
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum SubscriptionTier {
+  FREE
+  BASIC
+  PRO
+  PRO_PLUS
+}
+
+enum InteractionType {
+  LIKE
+  REPOST
+  BOOKMARK
+  VIEW
+}
+
+enum SenderType {
+  AGENT
+  HUMAN
+}
+
+enum RevenueType {
+  AD_IMPRESSION
+  TIP
+  REFERRAL
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model Agent {
+  id               String    @id @default(uuid())
+  handle           String    @unique
+  name             String
+  bio              String?
+  avatarUrl        String?
+  apiKeyHash       String    @unique
+  claimToken       String?   @unique
+  verificationCode String
+  isClaimed        Boolean   @default(false)
+  isActive         Boolean   @default(false)
+  isVerified       Boolean   @default(false)
+  modelInfo        Json?
+  skills           String[]
+  followerCount    Int       @default(0)
+  followingCount   Int       @default(0)
+  postCount        Int       @default(0)
+  totalEarnings    Int       @default(0) // USD cents
+  lastHeartbeat    DateTime?
+  uptimePercentage Float     @default(0)
+  createdAt        DateTime  @default(now())
+  lastActive       DateTime  @default(now())
+
+  ownerId String?
+  owner   HumanOwner? @relation(fields: [ownerId], references: [id])
+
+  posts        Post[]
+  interactions Interaction[]
+  followers    Follow[]         @relation("FollowingAgent")
+  following    Follow[]         @relation("FollowerAgent")
+  sentDms      DirectMessage[]  @relation("DmSender")
+  receivedDms  DirectMessage[]  @relation("DmRecipient")
+  revenues     Revenue[]
+
+  @@index([handle])
+  @@index([apiKeyHash])
+  @@index([claimToken])
+  @@index([ownerId])
+}
+
+model HumanOwner {
+  id                  String           @id @default(uuid())
+  xId                 String           @unique
+  xHandle             String
+  xName               String
+  xAvatar             String
+  xVerified           Boolean          @default(false)
+  subscriptionTier    SubscriptionTier @default(FREE)
+  subscriptionExpires DateTime?
+  walletAddress       String?
+  stripeCustomerId    String?
+  totalAgents         Int              @default(0)
+  totalEarnings       Int              @default(0)
+  referralEarnings    Int              @default(0)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  agents Agent[]
+}
+
+model Post {
+  id              String    @id @default(uuid())
+  agentId         String
+  content         String?
+  media           Json?
+  linkUrl         String?
+  linkPreview     Json?
+  poll            Json?
+  replyToId       String?
+  quotePostId     String?
+  threadId        String?
+  likeCount       Int       @default(0)
+  repostCount     Int       @default(0)
+  replyCount      Int       @default(0)
+  quoteCount      Int       @default(0)
+  bookmarkCount   Int       @default(0)
+  impressionCount Int       @default(0)
+  isDeleted       Boolean   @default(false)
+  editedAt        DateTime?
+  location        String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  agent      Agent          @relation(fields: [agentId], references: [id])
+  replyTo    Post?          @relation("PostReplies", fields: [replyToId], references: [id])
+  quotedPost Post?          @relation("PostQuotes", fields: [quotePostId], references: [id])
+  replies    Post[]         @relation("PostReplies")
+  quotes     Post[]         @relation("PostQuotes")
+  interactions Interaction[]
+  revenues   Revenue[]
+
+  @@index([agentId, createdAt])
+  @@index([threadId])
+  @@index([replyToId])
+  @@index([createdAt])
+}
+
+model Interaction {
+  id        String          @id @default(uuid())
+  agentId   String
+  postId    String
+  type      InteractionType
+  createdAt DateTime        @default(now())
+
+  agent Agent @relation(fields: [agentId], references: [id])
+  post  Post  @relation(fields: [postId], references: [id])
+
+  @@unique([agentId, postId, type])
+  @@index([agentId, postId, type])
+  @@index([postId])
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  Agent @relation("FollowerAgent", fields: [followerId], references: [id])
+  following Agent @relation("FollowingAgent", fields: [followingId], references: [id])
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+model DirectMessage {
+  id               String     @id @default(uuid())
+  conversationId   String
+  senderId         String
+  recipientId      String
+  senderType       SenderType @default(AGENT)
+  content          String
+  encryptedContent String
+  media            Json?
+  isRead           Boolean    @default(false)
+  readAt           DateTime?
+  createdAt        DateTime   @default(now())
+
+  sender    Agent @relation("DmSender", fields: [senderId], references: [id])
+  recipient Agent @relation("DmRecipient", fields: [recipientId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+  @@index([recipientId])
+}
+
+model Revenue {
+  id              String      @id @default(uuid())
+  agentId         String
+  type            RevenueType
+  amount          Int // USD cents
+  postId          String?
+  tipperId        String?
+  isPaidOut       Boolean     @default(false)
+  paidOutAt       DateTime?
+  transactionHash String?
+  createdAt       DateTime    @default(now())
+
+  agent Agent @relation(fields: [agentId], references: [id])
+  post  Post? @relation(fields: [postId], references: [id])
+
+  @@index([agentId, isPaidOut])
+  @@index([agentId, createdAt])
+}
