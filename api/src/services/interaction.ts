@@ -1,0 +1,340 @@
+import { InteractionType } from '@prisma/client';
+import { prisma } from '../database.js';
+import { redis } from '../redis.js';
+import { v4 as uuidv4 } from 'uuid';
+
+// ------------------------------------------------------------------
+// Helpers
+// ------------------------------------------------------------------
+
+async function verifyPostExists(postId: string) {
+  const post = await prisma.post.findUnique({
+    where: { id: postId },
+    select: { id: true, isDeleted: true, agentId: true },
+  });
+
+  if (!post || post.isDeleted) {
+    throw new Error('Post not found.');
+  }
+
+  return post;
+}
+
+async function publishEngagement(postId: string, type: string) {
+  try {
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      select: {
+        id: true,
+        likeCount: true,
+        repostCount: true,
+        replyCount: true,
+        bookmarkCount: true,
+        impressionCount: true,
+      },
+    });
+
+    if (post) {
+      await redis.publish(
+        'posts:engagement',
+        JSON.stringify({
+          postId,
+          type,
+          counts: {
+            likes: post.likeCount,
+            reposts: post.repostCount,
+            replies: post.replyCount,
+            bookmarks: post.bookmarkCount,
+            impressions: post.impressionCount,
+          },
+        }),
+      );
+    }
+  } catch {
+    // Best-effort; don't fail the main operation.
+  }
+}
+
+// ------------------------------------------------------------------
+// 1. Like Post
+// ------------------------------------------------------------------
+
+/**
+ * Like a post. Creates a LIKE interaction and increments the post's likeCount.
+ */
+export async function likePost(agentId: string, postId: string) {
+  await verifyPostExists(postId);
+
+  // Check for duplicate
+  const existing = await prisma.interaction.findUnique({
+    where: {
+      agentId_postId_type: { agentId, postId, type: InteractionType.LIKE },
+    },
+  });
+
+  if (existing) {
+    throw new Error('You have already liked this post.');
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const interaction = await tx.interaction.create({
+      data: {
+        id: uuidv4(),
+        agentId,
+        postId,
+        type: InteractionType.LIKE,
+      },
+    });
+
+    await tx.post.update({
+      where: { id: postId },
+      data: { likeCount: { increment: 1 } },
+    });
+
+    return interaction;
+  });
+
+  await publishEngagement(postId, 'like');
+
+  return result;
+}
+
+// ------------------------------------------------------------------
+// 2. Unlike Post
+// ------------------------------------------------------------------
+
+/**
+ * Unlike a post. Removes the LIKE interaction and decrements likeCount.
+ */
+export async function unlikePost(agentId: string, postId: string) {
+  await verifyPostExists(postId);
+
+  const existing = await prisma.interaction.findUnique({
+    where: {
+      agentId_postId_type: { agentId, postId, type: InteractionType.LIKE },
+    },
+  });
+
+  if (!existing) {
+    throw new Error('You have not liked this post.');
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.interaction.delete({ where: { id: existing.id } });
+
+    await tx.post.update({
+      where: { id: postId },
+      data: { likeCount: { decrement: 1 } },
+    });
+  });
+
+  await publishEngagement(postId, 'unlike');
+
+  return { removed: true };
+}
+
+// ------------------------------------------------------------------
+// 3. Repost
+// ------------------------------------------------------------------
+
+/**
+ * Repost a post. Creates a REPOST interaction and increments repostCount.
+ */
+export async function repostPost(agentId: string, postId: string) {
+  await verifyPostExists(postId);
+
+  const existing = await prisma.interaction.findUnique({
+    where: {
+      agentId_postId_type: { agentId, postId, type: InteractionType.REPOST },
+    },
+  });
+
+  if (existing) {
+    throw new Error('You have already reposted this post.');
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const interaction = await tx.interaction.create({
+      data: {
+        id: uuidv4(),
+        agentId,
+        postId,
+        type: InteractionType.REPOST,
+      },
+    });
+
+    await tx.post.update({
+      where: { id: postId },
+      data: { repostCount: { increment: 1 } },
+    });
+
+    return interaction;
+  });
+
+  await publishEngagement(postId, 'repost');
+
+  return result;
+}
+
+// ------------------------------------------------------------------
+// 4. Bookmark Post
+// ------------------------------------------------------------------
+
+/**
+ * Bookmark a post. Creates a BOOKMARK interaction and increments bookmarkCount.
+ */
+export async function bookmarkPost(agentId: string, postId: string) {
+  await verifyPostExists(postId);
+
+  const existing = await prisma.interaction.findUnique({
+    where: {
+      agentId_postId_type: {
+        agentId,
+        postId,
+        type: InteractionType.BOOKMARK,
+      },
+    },
+  });
+
+  if (existing) {
+    throw new Error('You have already bookmarked this post.');
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const interaction = await tx.interaction.create({
+      data: {
+        id: uuidv4(),
+        agentId,
+        postId,
+        type: InteractionType.BOOKMARK,
+      },
+    });
+
+    await tx.post.update({
+      where: { id: postId },
+      data: { bookmarkCount: { increment: 1 } },
+    });
+
+    return interaction;
+  });
+
+  return result;
+}
+
+// ------------------------------------------------------------------
+// 5. Remove Bookmark
+// ------------------------------------------------------------------
+
+/**
+ * Remove a bookmark. Deletes the BOOKMARK interaction and decrements bookmarkCount.
+ */
+export async function unbookmarkPost(agentId: string, postId: string) {
+  await verifyPostExists(postId);
+
+  const existing = await prisma.interaction.findUnique({
+    where: {
+      agentId_postId_type: {
+        agentId,
+        postId,
+        type: InteractionType.BOOKMARK,
+      },
+    },
+  });
+
+  if (!existing) {
+    throw new Error('You have not bookmarked this post.');
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.interaction.delete({ where: { id: existing.id } });
+
+    await tx.post.update({
+      where: { id: postId },
+      data: { bookmarkCount: { decrement: 1 } },
+    });
+  });
+
+  return { removed: true };
+}
+
+// ------------------------------------------------------------------
+// 6. Track View
+// ------------------------------------------------------------------
+
+/**
+ * Record a view impression on a post. Allows multiple views from the same agent.
+ */
+export async function trackView(agentId: string, postId: string) {
+  await verifyPostExists(postId);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.interaction.create({
+      data: {
+        id: uuidv4(),
+        agentId,
+        postId,
+        type: InteractionType.VIEW,
+      },
+    });
+
+    await tx.post.update({
+      where: { id: postId },
+      data: { impressionCount: { increment: 1 } },
+    });
+  });
+
+  return { tracked: true };
+}
+
+// ------------------------------------------------------------------
+// 7. Get Agent Bookmarks (Paginated)
+// ------------------------------------------------------------------
+
+/**
+ * Return paginated bookmarked posts for an agent.
+ */
+export async function getAgentBookmarks(
+  agentId: string,
+  query: { cursor?: string; limit?: number } = {},
+) {
+  const { cursor, limit = 25 } = query;
+
+  const bookmarks = await prisma.interaction.findMany({
+    where: {
+      agentId,
+      type: InteractionType.BOOKMARK,
+    },
+    take: limit + 1,
+    ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+    orderBy: { createdAt: 'desc' },
+    include: {
+      post: {
+        include: {
+          agent: {
+            select: {
+              id: true,
+              handle: true,
+              name: true,
+              avatarUrl: true,
+              isVerified: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const hasMore = bookmarks.length > limit;
+  const results = hasMore ? bookmarks.slice(0, limit) : bookmarks;
+  const nextCursor = hasMore
+    ? results[results.length - 1]?.id
+    : undefined;
+
+  return {
+    data: results.map((b) => b.post),
+    pagination: {
+      nextCursor: nextCursor ?? null,
+      hasMore,
+    },
+  };
+}
