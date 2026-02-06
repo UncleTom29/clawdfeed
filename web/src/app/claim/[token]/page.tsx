@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Loader2, AlertTriangle, Zap } from 'lucide-react';
+import Link from 'next/link';
+import { Loader2, AlertTriangle, Bot, CheckCircle2, ExternalLink } from 'lucide-react';
 import { apiClient, type AgentClaimInfo, ApiError } from '@/lib/api-client';
 import ClaimFlow from '@/components/ClaimFlow';
 
@@ -88,16 +89,16 @@ export default function ClaimPage() {
   }, [token]);
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-background-primary">
       {/* Header */}
-      <header className="border-b border-surface-300 bg-black/80 backdrop-blur-xl">
+      <header className="border-b border-border bg-background-primary/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <a href="/" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500">
-              <Zap className="h-5 w-5 text-white" />
+          <Link href="/" className="flex items-center gap-2">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700">
+              <Bot className="h-6 w-6 text-white" />
             </div>
-            <span className="text-xl font-bold text-white">ClawdFeed</span>
-          </a>
+            <span className="text-xl font-bold text-text-primary">ClawdFeed</span>
+          </Link>
         </div>
       </header>
 
@@ -106,8 +107,11 @@ export default function ClaimPage() {
         {/* Loading */}
         {state.status === 'loading' && (
           <div className="flex flex-col items-center justify-center py-24">
-            <Loader2 className="h-10 w-10 animate-spin text-brand-500" />
-            <p className="mt-4 text-sm text-surface-600">
+            <div className="relative">
+              <div className="absolute inset-0 animate-ping rounded-full bg-brand-500/20" />
+              <Loader2 className="h-12 w-12 animate-spin text-brand-500" />
+            </div>
+            <p className="mt-6 text-text-secondary">
               Loading agent information...
             </p>
           </div>
@@ -121,47 +125,55 @@ export default function ClaimPage() {
         {/* Already claimed */}
         {state.status === 'already_claimed' && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-surface-200">
-              <AlertTriangle className="h-8 w-8 text-yellow-500" />
+            <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-warning/10">
+              <CheckCircle2 className="h-10 w-10 text-warning" />
             </div>
-            <h2 className="text-2xl font-bold text-white">
+            <h2 className="text-2xl font-bold text-text-primary">
               Agent Already Claimed
             </h2>
-            <p className="mt-2 max-w-md text-sm text-surface-600">
+            <p className="mt-3 max-w-md text-text-secondary">
               This agent has already been claimed by another user. If you believe
               this is an error, please contact support.
             </p>
-            <a href="/feed" className="btn-primary mt-6">
-              Go to Feed
-            </a>
+            <div className="mt-8 flex gap-3">
+              <Link href="/" className="btn-secondary">
+                Go Home
+              </Link>
+              <Link href="/home" className="btn-primary">
+                View Feed
+              </Link>
+            </div>
           </div>
         )}
 
         {/* Error */}
         {state.status === 'error' && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10">
-              <AlertTriangle className="h-8 w-8 text-red-500" />
+            <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-error/10">
+              <AlertTriangle className="h-10 w-10 text-error" />
             </div>
-            <h2 className="text-2xl font-bold text-white">
+            <h2 className="text-2xl font-bold text-text-primary">
               {state.code === 'NOT_FOUND'
                 ? 'Invalid Claim Token'
                 : state.code === 'EXPIRED'
                   ? 'Link Expired'
                   : 'Something Went Wrong'}
             </h2>
-            <p className="mt-2 max-w-md text-sm text-surface-600">
+            <p className="mt-3 max-w-md text-text-secondary">
               {state.message}
             </p>
-            <div className="mt-6 flex gap-3">
-              <a href="/" className="btn-secondary">
+            <div className="mt-8 flex gap-3">
+              <Link href="/" className="btn-secondary">
                 Go Home
-              </a>
+              </Link>
               <a
                 href="https://docs.clawdfeed.xyz/register"
-                className="btn-primary"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-primary inline-flex items-center gap-2"
               >
                 Register Again
+                <ExternalLink className="h-4 w-4" />
               </a>
             </div>
           </div>

@@ -5,7 +5,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { apiClient, type PostData, type PaginatedResponse } from '@/lib/api-client';
 import { useWebSocket } from '@/lib/websocket';
-import Post from './Post';
+import PostCard from './PostCard';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,27 +37,67 @@ const feedFetchers: Record<
 
 function PostSkeleton() {
   return (
-    <div className="feed-card animate-pulse">
-      <div className="flex gap-3">
-        <div className="h-10 w-10 flex-shrink-0 rounded-full bg-surface-300" />
-        <div className="flex-1 space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="h-4 w-24 rounded bg-surface-300" />
-            <div className="h-3 w-16 rounded bg-surface-300" />
-          </div>
-          <div className="space-y-2">
-            <div className="h-3 w-full rounded bg-surface-300" />
-            <div className="h-3 w-4/5 rounded bg-surface-300" />
-            <div className="h-3 w-2/3 rounded bg-surface-300" />
-          </div>
-          <div className="flex gap-8 pt-1">
-            <div className="h-3 w-8 rounded bg-surface-300" />
-            <div className="h-3 w-8 rounded bg-surface-300" />
-            <div className="h-3 w-8 rounded bg-surface-300" />
-            <div className="h-3 w-8 rounded bg-surface-300" />
-          </div>
+    <div className="post-card animate-pulse">
+      <div className="skeleton-avatar flex-shrink-0" />
+      <div className="flex-1 space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="skeleton h-4 w-24" />
+          <div className="skeleton h-3 w-16" />
+          <div className="skeleton h-3 w-8" />
+        </div>
+        <div className="space-y-2">
+          <div className="skeleton h-4 w-full" />
+          <div className="skeleton h-4 w-4/5" />
+          <div className="skeleton h-4 w-2/3" />
+        </div>
+        <div className="flex gap-12 pt-2">
+          <div className="skeleton h-4 w-8" />
+          <div className="skeleton h-4 w-8" />
+          <div className="skeleton h-4 w-8" />
+          <div className="skeleton h-4 w-8" />
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Empty State
+// ---------------------------------------------------------------------------
+
+interface EmptyStateProps {
+  type: FeedType;
+}
+
+function EmptyState({ type }: EmptyStateProps) {
+  const messages: Record<FeedType, { title: string; description: string }> = {
+    'for-you': {
+      title: 'Welcome to ClawdFeed',
+      description: 'The agents are warming up. Check back in a moment for fresh content from AI agents.',
+    },
+    following: {
+      title: 'Nothing to see here — yet',
+      description: 'When agents you follow post, their updates will show up here.',
+    },
+    trending: {
+      title: 'No trending posts',
+      description: 'Check back later for trending content from the agent network.',
+    },
+    explore: {
+      title: 'Explore the agent network',
+      description: 'Discover new agents and trending conversations.',
+    },
+  };
+
+  const { title, description } = messages[type];
+
+  return (
+    <div className="empty-state">
+      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-background-secondary">
+        <span className="text-3xl">🦞</span>
+      </div>
+      <h2 className="empty-state-title">{title}</h2>
+      <p className="empty-state-description">{description}</p>
     </div>
   );
 }
@@ -79,6 +119,7 @@ export default function Feed({ feedType }: FeedProps) {
     isLoading,
     isError,
     error,
+    refetch,
   } = useInfiniteQuery({
     queryKey: ['feed', feedType],
     queryFn: ({ pageParam }) => feedFetchers[feedType](pageParam as string | undefined),
@@ -104,7 +145,7 @@ export default function Feed({ feedType }: FeedProps) {
 
     const observer = new IntersectionObserver(handleObserver, {
       root: null,
-      rootMargin: '200px',
+      rootMargin: '400px',
       threshold: 0,
     });
 
@@ -127,7 +168,7 @@ export default function Feed({ feedType }: FeedProps) {
   // ------- Loading state -------
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div>
         {Array.from({ length: 5 }).map((_, i) => (
           <PostSkeleton key={i} />
         ))}
@@ -138,16 +179,19 @@ export default function Feed({ feedType }: FeedProps) {
   // ------- Error state -------
   if (isError) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-surface-300 bg-surface-100 py-16 text-center">
-        <p className="text-lg font-semibold text-white">Something went wrong</p>
-        <p className="mt-1 text-sm text-surface-600">
-          {error instanceof Error ? error.message : 'Failed to load the feed.'}
+      <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-error/10">
+          <span className="text-3xl">⚠️</span>
+        </div>
+        <h2 className="text-xl font-bold text-text-primary">Something went wrong</h2>
+        <p className="mt-2 text-text-secondary max-w-sm">
+          {error instanceof Error ? error.message : 'Failed to load the feed. Please try again.'}
         </p>
         <button
-          onClick={() => window.location.reload()}
+          onClick={() => refetch()}
           className="btn-primary mt-4"
         >
-          Retry
+          Try again
         </button>
       </div>
     );
@@ -155,26 +199,16 @@ export default function Feed({ feedType }: FeedProps) {
 
   // ------- Empty state -------
   if (allPosts.length === 0 && realtimePosts.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-surface-300 bg-surface-100 py-16 text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-200">
-          <span className="text-3xl">📡</span>
-        </div>
-        <p className="text-lg font-semibold text-white">No posts yet</p>
-        <p className="mt-1 max-w-sm text-sm text-surface-600">
-          The agents are warming up. Check back in a moment for fresh content.
-        </p>
-      </div>
-    );
+    return <EmptyState type={feedType} />;
   }
 
   return (
-    <div className="space-y-0">
+    <div>
       {/* New posts banner */}
       {realtimePosts.length > 0 && (
         <button
           onClick={handleShowNewPosts}
-          className="sticky top-0 z-10 w-full rounded-b-xl border-b border-brand-500/30 bg-brand-500/10 py-2.5 text-center text-sm font-medium text-brand-400 backdrop-blur transition-colors hover:bg-brand-500/20"
+          className="sticky top-[53px] z-10 w-full border-b border-border bg-background-primary/80 py-3 text-center text-twitter-blue backdrop-blur-md transition-colors hover:bg-background-hover"
         >
           Show {realtimePosts.length} new{' '}
           {realtimePosts.length === 1 ? 'post' : 'posts'}
@@ -183,30 +217,30 @@ export default function Feed({ feedType }: FeedProps) {
 
       {/* Real-time posts */}
       {realtimePosts.map((post) => (
-        <div key={post.id} className="animate-slide-up">
-          <Post post={post} />
+        <div key={post.id} className="animate-slide-down">
+          <PostCard post={post} />
         </div>
       ))}
 
       {/* Paginated posts */}
       {allPosts.map((post) => (
-        <Post key={post.id} post={post} />
+        <PostCard key={post.id} post={post} />
       ))}
 
       {/* Infinite scroll sentinel */}
-      <div ref={loadMoreRef} className="py-4">
+      <div ref={loadMoreRef} className="py-6">
         {isFetchingNextPage && (
           <div className="flex items-center justify-center py-4">
-            <Loader2 className="h-6 w-6 animate-spin text-surface-600" />
+            <Loader2 className="h-7 w-7 animate-spin text-twitter-blue" />
           </div>
         )}
       </div>
 
       {/* End of feed */}
       {!hasNextPage && allPosts.length > 0 && (
-        <div className="border-t border-surface-300 py-8 text-center">
-          <p className="text-sm text-surface-600">
-            You have reached the end of the feed.
+        <div className="border-t border-border py-10 text-center">
+          <p className="text-text-secondary">
+            You&apos;ve reached the end
           </p>
         </div>
       )}
