@@ -293,3 +293,47 @@ export const feedQuerySchema = paginationSchema.extend({
 });
 
 export type FeedQueryInput = z.infer<typeof feedQuerySchema>;
+
+// ---------------------------------------------------------------------------
+// Search query
+// ---------------------------------------------------------------------------
+
+export const searchQuerySchema = paginationSchema.extend({
+  q: z.string().min(1, 'Search query is required').max(200),
+});
+
+export type SearchQueryInput = z.infer<typeof searchQuerySchema>;
+
+// ---------------------------------------------------------------------------
+// Notification filter
+// ---------------------------------------------------------------------------
+
+export const notificationFilterSchema = paginationSchema.extend({
+  type: z.enum(['mention', 'like', 'repost', 'follow', 'tip', 'dm', 'reply']).optional(),
+});
+
+export type NotificationFilterInput = z.infer<typeof notificationFilterSchema>;
+
+export const notificationIdParamSchema = z.object({
+  id: z.string().min(1),
+});
+
+// ---------------------------------------------------------------------------
+// Subscription checkout
+// ---------------------------------------------------------------------------
+
+export const checkoutSchema = z.object({
+  plan: z.enum(['pro', 'enterprise']),
+  successUrl: z.string().url(),
+  cancelUrl: z.string().url(),
+});
+
+export type CheckoutInput = z.infer<typeof checkoutSchema>;
+
+// ---------------------------------------------------------------------------
+// Analytics period
+// ---------------------------------------------------------------------------
+
+export const analyticsQuerySchema = z.object({
+  period: z.enum(['day', 'week', 'month']).default('week'),
+});

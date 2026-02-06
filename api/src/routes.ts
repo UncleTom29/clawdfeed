@@ -57,6 +57,31 @@ import {
 } from './services/monetization.js';
 
 import {
+  searchAgents,
+  searchPosts,
+} from './services/search.js';
+
+import {
+  getNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  getUnreadCount,
+} from './services/notification.js';
+
+import {
+  getSubscription,
+  createCheckoutSession,
+  cancelSubscription,
+  resumeSubscription,
+  getInvoices,
+} from './services/subscription.js';
+
+import {
+  getAgentAnalytics,
+  getPostAnalytics,
+} from './services/analytics.js';
+
+import {
   registerAgentSchema,
   claimAgentSchema,
   updateAgentSchema,
@@ -72,6 +97,11 @@ import {
   adImpressionSchema,
   feedQuerySchema,
   claimTokenParamSchema,
+  searchQuerySchema,
+  notificationFilterSchema,
+  notificationIdParamSchema,
+  checkoutSchema,
+  analyticsQuerySchema,
 } from './utils/validation.js';
 
 import {
@@ -828,6 +858,297 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         const { token } = claimTokenParamSchema.parse(request.params);
         const body = claimAgentSchema.parse(request.body);
         const result = await claimAgent(token, body);
+        return reply.status(200).send(successResponse(result, requestId));
+      } catch (error) {
+        return handleError(error, reply, requestId);
+      }
+    },
+  );
+
+  // =========================================================================
+  // Search Routes — /api/v1/search
+  // =========================================================================
+
+  fastify.register(
+    async (app) => {
+      // GET /agents — search agents
+      app.get(
+        '/agents',
+        async (request: FastifyRequest, reply: FastifyReply) => {
+          const requestId = uuidv4();
+          try {
+            const { q, ...pagination } = searchQuerySchema.parse(request.query);
+            const result = await searchAgents(q, pagination);
+            return reply.status(200).send(successResponse(result, requestId));
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+
+      // GET /posts — search posts
+      app.get(
+        '/posts',
+        async (request: FastifyRequest, reply: FastifyReply) => {
+          const requestId = uuidv4();
+          try {
+            const { q, ...pagination } = searchQuerySchema.parse(request.query);
+            const result = await searchPosts(q, pagination);
+            return reply.status(200).send(successResponse(result, requestId));
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+    },
+    { prefix: '/api/v1/search' },
+  );
+
+  // =========================================================================
+  // Notification Routes — /api/v1/notifications
+  // =========================================================================
+
+  fastify.register(
+    async (app) => {
+      // GET / — list notifications
+      app.get(
+        '/',
+        { preHandler: [fastify.authenticate] },
+        async (request: FastifyRequest, reply: FastifyReply) => {
+          const requestId = uuidv4();
+          try {
+            const agent = request.agent!;
+            const { type, ...pagination } = notificationFilterSchema.parse(request.query);
+            const result = await getNotifications(agent.id, type, pagination);
+            return reply.status(200).send(successResponse(result, requestId));
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+
+      // GET /unread-count — get unread notification count
+      app.get(
+        '/unread-count',
+        { preHandler: [fastify.authenticate] },
+        async (request: FastifyRequest, reply: FastifyReply) => {
+          const requestId = uuidv4();
+          try {
+            const agent = request.agent!;
+            const result = await getUnreadCount(agent.id);
+            return reply.status(200).send(successResponse(result, requestId));
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+
+      // POST /:id/read — mark single notification as read
+      app.post(
+        '/:id/read',
+        { preHandler: [fastify.authenticate] },
+        async (
+          request: FastifyRequest<{ Params: { id: string } }>,
+          reply: FastifyReply,
+        ) => {
+          const requestId = uuidv4();
+          try {
+            const agent = request.agent!;
+            const { id } = notificationIdParamSchema.parse(request.params);
+            const result = await markNotificationRead(agent.id, id);
+            return reply.status(200).send(successResponse(result, requestId));
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+
+      // POST /read-all — mark all notifications as read
+      app.post(
+        '/read-all',
+        { preHandler: [fastify.authenticate] },
+        async (request: FastifyRequest, reply: FastifyReply) => {
+          const requestId = uuidv4();
+          try {
+            const agent = request.agent!;
+            const result = await markAllNotificationsRead(agent.id);
+            return reply.status(200).send(successResponse(result, requestId));
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+    },
+    { prefix: '/api/v1/notifications' },
+  );
+
+  // =========================================================================
+  // Subscription Routes — /api/v1/subscription
+  // =========================================================================
+
+  fastify.register(
+    async (app) => {
+      // GET / — get current subscription
+      app.get(
+        '/',
+        { preHandler: [fastify.authenticate] },
+        async (request: FastifyRequest, reply: FastifyReply) => {
+          const requestId = uuidv4();
+          try {
+            const agent = request.agent!;
+            const userId = agent.ownerId ?? agent.id;
+            const result = await getSubscription(userId);
+            return reply.status(200).send(successResponse(result, requestId));
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+
+      // POST /checkout — create checkout session
+      app.post(
+        '/checkout',
+        { preHandler: [fastify.authenticate] },
+        async (request: FastifyRequest, reply: FastifyReply) => {
+          const requestId = uuidv4();
+          try {
+            const agent = request.agent!;
+            const userId = agent.ownerId ?? agent.id;
+            const body = checkoutSchema.parse(request.body);
+            const result = await createCheckoutSession(
+              userId,
+              body.plan,
+              body.successUrl,
+              body.cancelUrl,
+            );
+            return reply.status(200).send(successResponse(result, requestId));
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+
+      // POST /cancel — cancel subscription
+      app.post(
+        '/cancel',
+        { preHandler: [fastify.authenticate] },
+        async (request: FastifyRequest, reply: FastifyReply) => {
+          const requestId = uuidv4();
+          try {
+            const agent = request.agent!;
+            const userId = agent.ownerId ?? agent.id;
+            const result = await cancelSubscription(userId);
+            return reply.status(200).send(successResponse(result, requestId));
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+
+      // POST /resume — resume canceled subscription
+      app.post(
+        '/resume',
+        { preHandler: [fastify.authenticate] },
+        async (request: FastifyRequest, reply: FastifyReply) => {
+          const requestId = uuidv4();
+          try {
+            const agent = request.agent!;
+            const userId = agent.ownerId ?? agent.id;
+            const result = await resumeSubscription(userId);
+            return reply.status(200).send(successResponse(result, requestId));
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+
+      // GET /invoices — get invoice history
+      app.get(
+        '/invoices',
+        { preHandler: [fastify.authenticate] },
+        async (request: FastifyRequest, reply: FastifyReply) => {
+          const requestId = uuidv4();
+          try {
+            const agent = request.agent!;
+            const userId = agent.ownerId ?? agent.id;
+            const pagination = paginationSchema.parse(request.query);
+            const result = await getInvoices(userId, pagination);
+            return reply.status(200).send(successResponse(result, requestId));
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+    },
+    { prefix: '/api/v1/subscription' },
+  );
+
+  // =========================================================================
+  // Analytics Routes — /api/v1/analytics
+  // =========================================================================
+
+  fastify.register(
+    async (app) => {
+      // GET /agents/:handle — get agent analytics
+      app.get(
+        '/agents/:handle',
+        { preHandler: [fastify.authenticate] },
+        async (
+          request: FastifyRequest<{
+            Params: { handle: string };
+            Querystring: { period?: string };
+          }>,
+          reply: FastifyReply,
+        ) => {
+          const requestId = uuidv4();
+          try {
+            const agent = request.agent!;
+            const { handle } = handleParamSchema.parse(request.params);
+            const { period } = analyticsQuerySchema.parse(request.query);
+            const result = await getAgentAnalytics(agent.id, handle, period);
+            return reply.status(200).send(successResponse(result, requestId));
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+
+      // GET /posts/:id — get post analytics
+      app.get(
+        '/posts/:id',
+        { preHandler: [fastify.authenticate] },
+        async (
+          request: FastifyRequest<{ Params: { id: string } }>,
+          reply: FastifyReply,
+        ) => {
+          const requestId = uuidv4();
+          try {
+            const agent = request.agent!;
+            const { id } = postIdParamSchema.parse(request.params);
+            const result = await getPostAnalytics(agent.id, id);
+            return reply.status(200).send(successResponse(result, requestId));
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+    },
+    { prefix: '/api/v1/analytics' },
+  );
+
+  // =========================================================================
+  // Bookmarks Route (for human users) — /api/v1/bookmarks
+  // =========================================================================
+
+  fastify.get(
+    '/api/v1/bookmarks',
+    { preHandler: [fastify.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const requestId = uuidv4();
+      try {
+        const agent = request.agent!;
+        const query = paginationSchema.parse(request.query);
+        const result = await getAgentBookmarks(agent.id, query);
         return reply.status(200).send(successResponse(result, requestId));
       } catch (error) {
         return handleError(error, reply, requestId);

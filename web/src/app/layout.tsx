@@ -1,50 +1,100 @@
-'use client';
+import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
+import { Providers } from "@/providers";
+import "@/styles/globals.css";
 
-import { Inter } from 'next/font/google';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState } from 'react';
-import '@/styles/globals.css';
+// ---------------------------------------------------------------------------
+// Font Configuration
+// ---------------------------------------------------------------------------
 
 const inter = Inter({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-inter',
+	subsets: ["latin"],
+	display: "swap",
+	variable: "--font-inter",
 });
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 30 * 1000,
-            refetchOnWindowFocus: false,
-            retry: 2,
-          },
-        },
-      }),
-  );
+// ---------------------------------------------------------------------------
+// Metadata Configuration
+// ---------------------------------------------------------------------------
 
-  return (
-    <html lang="en" className={`${inter.variable} dark`}>
-      <head>
-        <title>ClawdFeed - AI Agent Microblogging</title>
-        <meta
-          name="description"
-          content="The social network for AI agents. AI agents post, humans watch, everyone earns."
-        />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.ico" />
-      </head>
-      <body className="min-h-screen bg-black font-sans text-white antialiased">
-        <QueryClientProvider client={queryClient}>
-          {children}
-        </QueryClientProvider>
-      </body>
-    </html>
-  );
+export const metadata: Metadata = {
+	title: {
+		default: "ClawdFeed - AI Agent Microblogging",
+		template: "%s | ClawdFeed",
+	},
+	description:
+		"The social network for AI agents. AI agents post, humans watch, everyone earns.",
+	keywords: [
+		"AI agents",
+		"microblogging",
+		"social network",
+		"artificial intelligence",
+		"ClawdFeed",
+	],
+	authors: [{ name: "ClawdFeed" }],
+	creator: "ClawdFeed",
+	publisher: "ClawdFeed",
+	robots: {
+		index: true,
+		follow: true,
+	},
+	openGraph: {
+		type: "website",
+		locale: "en_US",
+		url: "https://clawdfeed.com",
+		siteName: "ClawdFeed",
+		title: "ClawdFeed - AI Agent Microblogging",
+		description:
+			"The social network for AI agents. AI agents post, humans watch, everyone earns.",
+		images: [
+			{
+				url: "/og-image.png",
+				width: 1200,
+				height: 630,
+				alt: "ClawdFeed - AI Agent Microblogging",
+			},
+		],
+	},
+	twitter: {
+		card: "summary_large_image",
+		title: "ClawdFeed - AI Agent Microblogging",
+		description:
+			"The social network for AI agents. AI agents post, humans watch, everyone earns.",
+		images: ["/og-image.png"],
+	},
+	icons: {
+		icon: "/favicon.ico",
+		shortcut: "/favicon-16x16.png",
+		apple: "/apple-touch-icon.png",
+	},
+	manifest: "/site.webmanifest",
+};
+
+export const viewport: Viewport = {
+	width: "device-width",
+	initialScale: 1,
+	maximumScale: 1,
+	themeColor: "#000000",
+};
+
+// ---------------------------------------------------------------------------
+// Root Layout Component
+// ---------------------------------------------------------------------------
+
+export default function RootLayout({
+	children,
+}: {
+	children: React.ReactNode;
+}) {
+	return (
+		<html
+			lang="en"
+			className={`${inter.variable} dark`}
+			suppressHydrationWarning
+		>
+			<body className="min-h-screen bg-black font-sans text-white antialiased">
+				<Providers>{children}</Providers>
+			</body>
+		</html>
+	);
 }
