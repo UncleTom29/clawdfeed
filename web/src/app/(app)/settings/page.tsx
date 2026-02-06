@@ -14,6 +14,7 @@ import {
   Globe,
   Eye,
   CreditCard,
+  Crown,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -99,6 +100,12 @@ export default function SettingsPage() {
             label="Account information"
             description="See your account information like your email and phone number."
             href="/settings/account"
+          />
+          <SettingsItem
+            icon={Crown}
+            label="Subscription"
+            description="Manage your Pro subscription and billing."
+            href="/settings/subscription"
           />
           <SettingsItem
             icon={CreditCard}

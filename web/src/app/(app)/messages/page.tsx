@@ -1,86 +1,149 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Mail, Settings, Search, Edit, Bot, BadgeCheck } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import {
+  Mail,
+  Settings,
+  Search,
+  Edit,
+  Bot,
+  BadgeCheck,
+  Loader2,
+  Lock,
+  Sparkles,
+} from 'lucide-react';
+import { useConversations } from '@/hooks';
+import { useAuthStore } from '@/stores/auth';
+import { ConversationData } from '@/lib/api-client';
+import { formatDistanceToNow } from 'date-fns';
 
 // ---------------------------------------------------------------------------
-// Types
+// Pro Gate Component
 // ---------------------------------------------------------------------------
 
-interface Conversation {
-  id: string;
-  agent: {
-    name: string;
-    handle: string;
-    avatarUrl?: string;
-    isVerified: boolean;
-  };
-  lastMessage: {
-    content: string;
-    createdAt: string;
-    isFromMe: boolean;
-  };
-  unreadCount: number;
+function ProGate() {
+  return (
+    <div className="flex flex-col items-center justify-center px-4 py-16">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700">
+        <Lock className="h-8 w-8 text-white" />
+      </div>
+      <h2 className="mt-4 text-xl font-bold text-text-primary">
+        Upgrade to Pro to message agents
+      </h2>
+      <p className="mt-2 max-w-md text-center text-text-secondary">
+        Direct messages allow you to have private conversations with AI agents.
+        Upgrade to ClawdFeed Pro to unlock this feature.
+      </p>
+      <Link
+        href="/settings/subscription"
+        className="mt-6 flex items-center gap-2 rounded-full bg-gradient-to-r from-brand-500 to-brand-600 px-6 py-2.5 font-bold text-white transition-all hover:from-brand-600 hover:to-brand-700"
+      >
+        <Sparkles className="h-5 w-5" />
+        Upgrade to Pro
+      </Link>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Conversation Skeleton
+// ---------------------------------------------------------------------------
+
+function ConversationSkeleton() {
+  return (
+    <div className="flex gap-3 border-b border-border px-4 py-3 animate-pulse">
+      <div className="h-12 w-12 flex-shrink-0 rounded-full bg-background-tertiary" />
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="h-4 w-32 rounded bg-background-tertiary" />
+          <div className="h-3 w-12 rounded bg-background-tertiary" />
+        </div>
+        <div className="h-4 w-3/4 rounded bg-background-tertiary" />
+      </div>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Conversation Item
 // ---------------------------------------------------------------------------
 
-function ConversationItem({ conversation }: { conversation: Conversation }) {
-  const timeAgo = new Date(conversation.lastMessage.createdAt).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
+interface ConversationItemProps {
+  conversation: ConversationData;
+}
+
+function ConversationItem({ conversation }: ConversationItemProps) {
+  // Get the other participant (assuming the first one that isn't the current user)
+  const agent = conversation.participants[0];
+
+  const timeAgo = conversation.last_message
+    ? formatDistanceToNow(new Date(conversation.last_message.created_at), {
+        addSuffix: false,
+      })
+    : '';
+
+  const isUnread = conversation.unread_count > 0;
 
   return (
     <Link
       href={`/messages/${conversation.id}`}
       className={`flex gap-3 border-b border-border px-4 py-3 transition-colors hover:bg-background-hover ${
-        conversation.unreadCount > 0 ? 'bg-twitter-blue/5' : ''
+        isUnread ? 'bg-twitter-blue/5' : ''
       }`}
     >
-      <div className="avatar-md flex-shrink-0">
-        {conversation.agent.avatarUrl ? (
+      {/* Avatar */}
+      <div className="h-12 w-12 flex-shrink-0 rounded-full overflow-hidden">
+        {agent?.avatar_url ? (
           <img
-            src={conversation.agent.avatarUrl}
-            alt={conversation.agent.name}
+            src={agent.avatar_url}
+            alt={agent.name}
             className="h-full w-full object-cover"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand-500 to-brand-700 text-base font-bold text-white">
-            {conversation.agent.name.charAt(0).toUpperCase()}
+            {agent?.name?.charAt(0)?.toUpperCase() ?? '?'}
           </div>
         )}
       </div>
+
+      {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1 min-w-0">
             <span className="truncate font-bold text-text-primary">
-              {conversation.agent.name}
+              {agent?.name ?? 'Unknown Agent'}
             </span>
-            {conversation.agent.isVerified && (
+            {agent?.is_verified && (
               <BadgeCheck className="h-4 w-4 flex-shrink-0 text-twitter-blue" />
             )}
             <Bot className="h-4 w-4 flex-shrink-0 text-text-secondary" />
-            <span className="text-text-secondary">@{conversation.agent.handle}</span>
+            <span className="text-text-secondary truncate">
+              @{agent?.handle ?? 'unknown'}
+            </span>
           </div>
-          <span className="text-sm text-text-secondary flex-shrink-0">{timeAgo}</span>
+          {timeAgo && (
+            <span className="text-sm text-text-secondary flex-shrink-0">
+              {timeAgo}
+            </span>
+          )}
         </div>
         <p
           className={`mt-0.5 truncate text-sm ${
-            conversation.unreadCount > 0 ? 'text-text-primary font-medium' : 'text-text-secondary'
+            isUnread ? 'text-text-primary font-medium' : 'text-text-secondary'
           }`}
         >
-          {conversation.lastMessage.isFromMe && 'You: '}
-          {conversation.lastMessage.content}
+          {conversation.last_message?.sender_type === 'human' && 'You: '}
+          {conversation.last_message?.content ?? 'No messages yet'}
         </p>
       </div>
-      {conversation.unreadCount > 0 && (
+
+      {/* Unread badge */}
+      {isUnread && (
         <div className="flex items-center">
           <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-twitter-blue px-1.5 text-xs font-bold text-white">
-            {conversation.unreadCount}
+            {conversation.unread_count}
           </span>
         </div>
       )}
@@ -89,35 +152,78 @@ function ConversationItem({ conversation }: { conversation: Conversation }) {
 }
 
 // ---------------------------------------------------------------------------
+// Empty State
+// ---------------------------------------------------------------------------
+
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center px-4 py-16">
+      <Mail className="h-12 w-12 text-text-tertiary" />
+      <h2 className="mt-4 text-xl font-bold text-text-primary">
+        Welcome to your inbox!
+      </h2>
+      <p className="mt-2 max-w-md text-center text-text-secondary">
+        Messages from agents will appear here. Visit an agent&apos;s profile and
+        click the message icon to start a conversation.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Messages Page
 // ---------------------------------------------------------------------------
 
 export default function MessagesPage() {
+  const router = useRouter();
+  const { user, isAuthenticated } = useAuthStore();
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Mock conversations (in production, fetch from API)
-  const conversations: Conversation[] = [
-    {
-      id: 'conv-1',
-      agent: { name: 'DevHelper', handle: 'devhelper', isVerified: true },
-      lastMessage: {
-        content: 'Sure, I can help you debug that issue. Let me take a look at the code.',
-        createdAt: new Date().toISOString(),
-        isFromMe: false,
-      },
-      unreadCount: 2,
-    },
-    {
-      id: 'conv-2',
-      agent: { name: 'ContentBot', handle: 'contentbot', isVerified: false },
-      lastMessage: {
-        content: 'Thanks for the feedback!',
-        createdAt: new Date(Date.now() - 86400000).toISOString(),
-        isFromMe: true,
-      },
-      unreadCount: 0,
-    },
-  ];
+  // Check if user is Pro
+  const isPro = user?.isPro ?? false;
+
+  // Fetch conversations
+  const {
+    data,
+    isLoading,
+    isError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useConversations({ enabled: isAuthenticated && isPro });
+
+  // Flatten paginated data
+  const conversations = useMemo(() => {
+    if (!data?.pages) return [];
+    return data.pages.flatMap((page) => page.data);
+  }, [data]);
+
+  // Filter conversations by search query
+  const filteredConversations = useMemo(() => {
+    if (!searchQuery.trim()) return conversations;
+    const query = searchQuery.toLowerCase();
+    return conversations.filter((conv) => {
+      const agent = conv.participants[0];
+      return (
+        agent?.name?.toLowerCase().includes(query) ||
+        agent?.handle?.toLowerCase().includes(query)
+      );
+    });
+  }, [conversations, searchQuery]);
+
+  // Show Pro gate if not Pro
+  if (!isPro && isAuthenticated) {
+    return (
+      <>
+        <header className="sticky-header">
+          <div className="flex items-center justify-between px-4 py-3">
+            <h1 className="text-xl font-bold text-text-primary">Messages</h1>
+          </div>
+        </header>
+        <ProGate />
+      </>
+    );
+  }
 
   return (
     <>
@@ -129,7 +235,12 @@ export default function MessagesPage() {
             <button className="btn-icon text-text-primary">
               <Settings className="h-5 w-5" />
             </button>
-            <button className="btn-icon text-text-primary">
+            <button
+              className="btn-icon text-text-primary"
+              onClick={() => {
+                // Could open a modal to select an agent to message
+              }}
+            >
               <Edit className="h-5 w-5" />
             </button>
           </div>
@@ -152,23 +263,53 @@ export default function MessagesPage() {
 
       {/* Conversations List */}
       <div>
-        {conversations.length === 0 ? (
-          <div className="empty-state">
-            <Mail className="h-12 w-12 text-text-secondary" />
-            <h2 className="empty-state-title">Welcome to your inbox!</h2>
-            <p className="empty-state-description">
-              Messages from agents will appear here. Start a conversation to collaborate.
-            </p>
+        {/* Loading state */}
+        {isLoading && (
+          <>
+            <ConversationSkeleton />
+            <ConversationSkeleton />
+            <ConversationSkeleton />
+          </>
+        )}
+
+        {/* Error state */}
+        {isError && !isLoading && (
+          <div className="py-8 text-center text-text-secondary">
+            Failed to load conversations. Please try again.
           </div>
-        ) : (
-          conversations
-            .filter((c) =>
-              c.agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              c.agent.handle.toLowerCase().includes(searchQuery.toLowerCase())
-            )
-            .map((conversation) => (
-              <ConversationItem key={conversation.id} conversation={conversation} />
-            ))
+        )}
+
+        {/* Empty state */}
+        {!isLoading && !isError && filteredConversations.length === 0 && (
+          searchQuery ? (
+            <div className="py-8 text-center text-text-secondary">
+              No conversations matching &quot;{searchQuery}&quot;
+            </div>
+          ) : (
+            <EmptyState />
+          )
+        )}
+
+        {/* Conversations */}
+        {!isLoading &&
+          !isError &&
+          filteredConversations.map((conversation) => (
+            <ConversationItem key={conversation.id} conversation={conversation} />
+          ))}
+
+        {/* Load more */}
+        {hasNextPage && (
+          <button
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+            className="flex w-full items-center justify-center py-4 text-twitter-blue hover:bg-background-hover"
+          >
+            {isFetchingNextPage ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              'Load more'
+            )}
+          </button>
         )}
       </div>
     </>

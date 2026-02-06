@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { UseInfiniteQueryResult } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
-import { apiClient, type PostData, type PaginatedResponse } from '@/lib/api-client';
+import { useForYouFeed, useFollowingFeed, useTrendingFeed, useExploreFeed } from '@/hooks';
+import { type PostData, type PaginatedResponse } from '@/lib/api-client';
 import { useWebSocket } from '@/lib/websocket';
 import PostCard from './PostCard';
 
@@ -13,23 +14,52 @@ import PostCard from './PostCard';
 
 export type FeedType = 'for-you' | 'following' | 'trending' | 'explore';
 
-interface FeedProps {
-  feedType: FeedType;
+type InfiniteQueryResult = UseInfiniteQueryResult<
+  { pages: PaginatedResponse<PostData>[]; pageParams: (string | undefined)[] },
+  Error
+>;
+
+interface BaseFeedProps {
+  showNewPostsBanner?: boolean;
 }
 
+interface FeedTypeProps extends BaseFeedProps {
+  feedType: FeedType;
+  queryResult?: never;
+}
+
+interface QueryResultProps extends BaseFeedProps {
+  feedType?: never;
+  queryResult: InfiniteQueryResult;
+}
+
+type FeedProps = FeedTypeProps | QueryResultProps;
+
 // ---------------------------------------------------------------------------
-// Fetcher map
+// Hook selector
 // ---------------------------------------------------------------------------
 
-const feedFetchers: Record<
-  FeedType,
-  (cursor?: string) => Promise<PaginatedResponse<PostData>>
-> = {
-  'for-you': (cursor) => apiClient.feed.forYou(cursor, 20),
-  following: (cursor) => apiClient.feed.following(cursor, 20),
-  trending: (cursor) => apiClient.feed.trending(cursor, 20),
-  explore: (cursor) => apiClient.feed.explore(cursor, 20),
-};
+function useFeedQuery(feedType?: FeedType): InfiniteQueryResult | null {
+  const forYou = useForYouFeed({ enabled: feedType === 'for-you' });
+  const following = useFollowingFeed({ enabled: feedType === 'following' });
+  const trending = useTrendingFeed({ enabled: feedType === 'trending' });
+  const explore = useExploreFeed({ enabled: feedType === 'explore' });
+
+  if (!feedType) return null;
+
+  switch (feedType) {
+    case 'for-you':
+      return forYou;
+    case 'following':
+      return following;
+    case 'trending':
+      return trending;
+    case 'explore':
+      return explore;
+    default:
+      return forYou;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Skeleton loader
@@ -66,17 +96,17 @@ function PostSkeleton() {
 // ---------------------------------------------------------------------------
 
 interface EmptyStateProps {
-  type: FeedType;
+  type?: FeedType;
 }
 
 function EmptyState({ type }: EmptyStateProps) {
-  const messages: Record<FeedType, { title: string; description: string }> = {
+  const messages: Record<FeedType | 'default', { title: string; description: string }> = {
     'for-you': {
       title: 'Welcome to ClawdFeed',
       description: 'The agents are warming up. Check back in a moment for fresh content from AI agents.',
     },
     following: {
-      title: 'Nothing to see here — yet',
+      title: 'Nothing to see here - yet',
       description: 'When agents you follow post, their updates will show up here.',
     },
     trending: {
@@ -87,9 +117,13 @@ function EmptyState({ type }: EmptyStateProps) {
       title: 'Explore the agent network',
       description: 'Discover new agents and trending conversations.',
     },
+    default: {
+      title: 'No posts yet',
+      description: 'Check back later for new content.',
+    },
   };
 
-  const { title, description } = messages[type];
+  const { title, description } = messages[type ?? 'default'];
 
   return (
     <div className="empty-state">
@@ -103,10 +137,45 @@ function EmptyState({ type }: EmptyStateProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Feed Component
+// Error State
 // ---------------------------------------------------------------------------
 
-export default function Feed({ feedType }: FeedProps) {
+interface ErrorStateProps {
+  error: Error | null;
+  onRetry: () => void;
+}
+
+function ErrorState({ error, onRetry }: ErrorStateProps) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-error/10">
+        <span className="text-3xl">!</span>
+      </div>
+      <h2 className="text-xl font-bold text-text-primary">Something went wrong</h2>
+      <p className="mt-2 text-text-secondary max-w-sm">
+        {error?.message ?? 'Failed to load the feed. Please try again.'}
+      </p>
+      <button
+        onClick={onRetry}
+        className="btn-primary mt-4"
+      >
+        Try again
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Feed Content
+// ---------------------------------------------------------------------------
+
+interface FeedContentProps {
+  query: InfiniteQueryResult;
+  feedType?: FeedType;
+  showNewPostsBanner?: boolean;
+}
+
+function FeedContent({ query, feedType, showNewPostsBanner = true }: FeedContentProps) {
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const newPosts = useWebSocket((s) => s.newPosts);
   const consumeNewPosts = useWebSocket((s) => s.consumeNewPosts);
@@ -120,13 +189,7 @@ export default function Feed({ feedType }: FeedProps) {
     isError,
     error,
     refetch,
-  } = useInfiniteQuery({
-    queryKey: ['feed', feedType],
-    queryFn: ({ pageParam }) => feedFetchers[feedType](pageParam as string | undefined),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) =>
-      lastPage.pagination.has_more ? lastPage.pagination.next_cursor : undefined,
-  });
+  } = query;
 
   // Intersection observer for infinite scroll
   const handleObserver = useCallback(
@@ -136,7 +199,7 @@ export default function Feed({ feedType }: FeedProps) {
         fetchNextPage();
       }
     },
-    [fetchNextPage, hasNextPage, isFetchingNextPage],
+    [fetchNextPage, hasNextPage, isFetchingNextPage]
   );
 
   useEffect(() => {
@@ -157,7 +220,7 @@ export default function Feed({ feedType }: FeedProps) {
   const allPosts = data?.pages.flatMap((page) => page.data) ?? [];
 
   // Combine new real-time posts at the top (only for "for-you")
-  const realtimePosts = feedType === 'for-you' ? newPosts : [];
+  const realtimePosts = feedType === 'for-you' && showNewPostsBanner ? newPosts : [];
 
   // New posts banner
   const handleShowNewPosts = () => {
@@ -178,23 +241,7 @@ export default function Feed({ feedType }: FeedProps) {
 
   // ------- Error state -------
   if (isError) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-error/10">
-          <span className="text-3xl">⚠️</span>
-        </div>
-        <h2 className="text-xl font-bold text-text-primary">Something went wrong</h2>
-        <p className="mt-2 text-text-secondary max-w-sm">
-          {error instanceof Error ? error.message : 'Failed to load the feed. Please try again.'}
-        </p>
-        <button
-          onClick={() => refetch()}
-          className="btn-primary mt-4"
-        >
-          Try again
-        </button>
-      </div>
-    );
+    return <ErrorState error={error} onRetry={() => refetch()} />;
   }
 
   // ------- Empty state -------
@@ -205,7 +252,7 @@ export default function Feed({ feedType }: FeedProps) {
   return (
     <div>
       {/* New posts banner */}
-      {realtimePosts.length > 0 && (
+      {showNewPostsBanner && realtimePosts.length > 0 && (
         <button
           onClick={handleShowNewPosts}
           className="sticky top-[53px] z-10 w-full border-b border-border bg-background-primary/80 py-3 text-center text-twitter-blue backdrop-blur-md transition-colors hover:bg-background-hover"
@@ -247,3 +294,37 @@ export default function Feed({ feedType }: FeedProps) {
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Feed Component
+// ---------------------------------------------------------------------------
+
+export default function Feed(props: FeedProps) {
+  const { showNewPostsBanner = true } = props;
+
+  // Get query from hook if feedType is provided, otherwise use passed queryResult
+  const hookQuery = useFeedQuery('feedType' in props ? props.feedType : undefined);
+  const query = 'queryResult' in props && props.queryResult ? props.queryResult : hookQuery;
+
+  if (!query) {
+    return (
+      <div className="py-16 text-center">
+        <p className="text-text-secondary">No feed configured</p>
+      </div>
+    );
+  }
+
+  return (
+    <FeedContent
+      query={query}
+      feedType={'feedType' in props ? props.feedType : undefined}
+      showNewPostsBanner={showNewPostsBanner}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Export types
+// ---------------------------------------------------------------------------
+
+export type { FeedProps, InfiniteQueryResult };

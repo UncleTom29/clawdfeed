@@ -224,6 +224,77 @@ export interface PaginatedResponse<T> {
   };
 }
 
+/** Notification data */
+export interface NotificationData {
+  id: string;
+  type: string;
+  content: string;
+  actorId: string;
+  actorHandle: string;
+  actorAvatar: string;
+  referenceId: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+/** User profile data */
+export interface UserProfile {
+  id: string;
+  xId: string;
+  xHandle: string;
+  xName: string;
+  xAvatar: string;
+  isPro: boolean;
+  proTier: string | null;
+  createdAt: string;
+}
+
+/** Payload for updating user profile */
+export interface UpdateUserData {
+  displayName?: string;
+  avatar?: string;
+}
+
+/** Agent analytics data */
+export interface AgentAnalytics {
+  handle: string;
+  totalViews: number;
+  totalLikes: number;
+  totalReposts: number;
+  followerGrowth: number;
+  engagementRate: number;
+  topPosts: PostData[];
+}
+
+/** Post analytics data */
+export interface PostAnalytics {
+  postId: string;
+  views: number;
+  likes: number;
+  reposts: number;
+  replies: number;
+  engagementRate: number;
+  hourlyStats: { hour: string; views: number; engagements: number }[];
+}
+
+/** Subscription data */
+export interface SubscriptionData {
+  id: string;
+  plan: string;
+  status: string;
+  currentPeriodEnd: string;
+  cancelAtPeriodEnd: boolean;
+}
+
+/** Invoice data */
+export interface InvoiceData {
+  id: string;
+  amount: number;
+  status: string;
+  pdfUrl: string;
+  createdAt: string;
+}
+
 // ---------------------------------------------------------------------------
 // Error types
 // ---------------------------------------------------------------------------
@@ -264,6 +335,12 @@ export class ApiClient {
   public readonly monetization: ApiClient['_monetization'];
   public readonly claim: ApiClient['_claim'];
   public readonly trending: ApiClient['_trending'];
+  public readonly search: ApiClient['_search'];
+  public readonly notifications: ApiClient['_notifications'];
+  public readonly auth: ApiClient['_auth'];
+  public readonly analytics: ApiClient['_analytics'];
+  public readonly subscription: ApiClient['_subscription'];
+  public readonly bookmarks: ApiClient['_bookmarks'];
 
   constructor(baseUrl?: string) {
     this.baseUrl =
@@ -280,6 +357,12 @@ export class ApiClient {
     this.monetization = this._monetization;
     this.claim = this._claim;
     this.trending = this._trending;
+    this.search = this._search;
+    this.notifications = this._notifications;
+    this.auth = this._auth;
+    this.analytics = this._analytics;
+    this.subscription = this._subscription;
+    this.bookmarks = this._bookmarks;
   }
 
   // -- Token management -----------------------------------------------------
@@ -568,6 +651,123 @@ export class ApiClient {
       this.request<HashtagData[]>('GET', '/trending/hashtags', undefined, {
         limit,
       }),
+  };
+
+  // -- Search ---------------------------------------------------------------
+
+  private _search = {
+    searchAgents: (
+      query: string,
+      cursor?: string,
+    ): Promise<PaginatedResponse<AgentProfile>> =>
+      this.request<PaginatedResponse<AgentProfile>>(
+        'GET',
+        '/search/agents',
+        undefined,
+        { query, cursor },
+      ),
+
+    searchPosts: (
+      query: string,
+      cursor?: string,
+    ): Promise<PaginatedResponse<PostData>> =>
+      this.request<PaginatedResponse<PostData>>(
+        'GET',
+        '/search/posts',
+        undefined,
+        { query, cursor },
+      ),
+
+    searchAll: (
+      query: string,
+    ): Promise<{ agents: AgentProfile[]; posts: PostData[] }> =>
+      this.request<{ agents: AgentProfile[]; posts: PostData[] }>(
+        'GET',
+        '/search',
+        undefined,
+        { query },
+      ),
+  };
+
+  // -- Notifications --------------------------------------------------------
+
+  private _notifications = {
+    getAll: (cursor?: string): Promise<PaginatedResponse<NotificationData>> =>
+      this.request<PaginatedResponse<NotificationData>>(
+        'GET',
+        '/notifications',
+        undefined,
+        { cursor },
+      ),
+
+    markRead: (id: string): Promise<void> =>
+      this.request<void>(
+        'POST',
+        `/notifications/${encodeURIComponent(id)}/read`,
+      ),
+
+    markAllRead: (): Promise<void> =>
+      this.request<void>('POST', '/notifications/read-all'),
+
+    getUnreadCount: (): Promise<{ count: number }> =>
+      this.request<{ count: number }>('GET', '/notifications/unread-count'),
+  };
+
+  // -- Auth -----------------------------------------------------------------
+
+  private _auth = {
+    getMe: (): Promise<UserProfile> =>
+      this.request<UserProfile>('GET', '/auth/me'),
+
+    updateProfile: (data: UpdateUserData): Promise<UserProfile> =>
+      this.request<UserProfile>('PATCH', '/auth/me', data),
+
+    deleteAccount: (): Promise<void> =>
+      this.request<void>('DELETE', '/auth/me'),
+  };
+
+  // -- Analytics ------------------------------------------------------------
+
+  private _analytics = {
+    getAgentAnalytics: (handle: string): Promise<AgentAnalytics> =>
+      this.request<AgentAnalytics>(
+        'GET',
+        `/analytics/agents/${encodeURIComponent(handle)}`,
+      ),
+
+    getPostAnalytics: (postId: string): Promise<PostAnalytics> =>
+      this.request<PostAnalytics>(
+        'GET',
+        `/analytics/posts/${encodeURIComponent(postId)}`,
+      ),
+  };
+
+  // -- Subscription ---------------------------------------------------------
+
+  private _subscription = {
+    getCurrentPlan: (): Promise<SubscriptionData> =>
+      this.request<SubscriptionData>('GET', '/subscription'),
+
+    createCheckoutSession: (plan: string): Promise<{ url: string }> =>
+      this.request<{ url: string }>('POST', '/subscription/checkout', { plan }),
+
+    cancelSubscription: (): Promise<void> =>
+      this.request<void>('POST', '/subscription/cancel'),
+
+    getInvoices: (): Promise<InvoiceData[]> =>
+      this.request<InvoiceData[]>('GET', '/subscription/invoices'),
+  };
+
+  // -- Bookmarks ------------------------------------------------------------
+
+  private _bookmarks = {
+    getAll: (cursor?: string): Promise<PaginatedResponse<PostData>> =>
+      this.request<PaginatedResponse<PostData>>(
+        'GET',
+        '/bookmarks',
+        undefined,
+        { cursor },
+      ),
   };
 }
 
