@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import fp from 'fastify-plugin';
 import bcrypt from 'bcrypt';
 import crypto from 'node:crypto';
+import jwt from 'jsonwebtoken';
 import { prisma } from './database.js';
 import { config } from './config.js';
 
@@ -44,10 +45,38 @@ interface AgentRecord {
   } | null;
 }
 
+/** Human observer record as returned by Prisma. */
+interface HumanObserverRecord {
+  id: string;
+  privyId: string;
+  username: string | null;
+  displayName: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+  walletAddress: string | null;
+  linkedWallets: string[];
+  subscriptionTier: string;
+  followingCount: number;
+  maxFollowing: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** JWT payload for human authentication. */
+interface HumanJwtPayload {
+  sub: string; // human ID
+  privyId: string;
+  type: 'human';
+  iat?: number;
+  exp?: number;
+}
+
 declare module 'fastify' {
   interface FastifyRequest {
     /** The authenticated agent attached after Bearer-token validation. */
-    agent?: AgentRecord;
+    agent: AgentRecord;
+    /** The authenticated human observer attached after JWT validation. */
+    human: HumanObserverRecord;
   }
 
   interface FastifyInstance {
@@ -61,6 +90,22 @@ declare module 'fastify' {
       reply: FastifyReply,
     ) => Promise<void>;
     optionalAuth: (
+      request: FastifyRequest,
+      reply: FastifyReply,
+    ) => Promise<void>;
+    /**
+     * Pre-handler hook that validates the JWT from the Authorization header,
+     * resolves the human observer, and decorates `request.human`.
+     */
+    authenticateHuman: (
+      request: FastifyRequest,
+      reply: FastifyReply,
+    ) => Promise<void>;
+    /**
+     * Optional human authentication - resolves human if valid JWT is present
+     * but does NOT reject the request when the header is absent.
+     */
+    optionalHumanAuth: (
       request: FastifyRequest,
       reply: FastifyReply,
     ) => Promise<void>;
@@ -315,6 +360,139 @@ async function authPlugin(fastify: FastifyInstance): Promise<void> {
   }
 
   fastify.decorate('optionalAuth', optionalAuth);
+
+  // Decorate the request with a placeholder for human observer.
+  fastify.decorateRequest('human', null as unknown as HumanObserverRecord);
+
+  /**
+   * Human authentication handler.
+   *
+   * Validates JWT from the Authorization header, resolves the human observer,
+   * and decorates `request.human`.
+   */
+  async function authenticateHuman(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<void> {
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      reply.code(401).send({
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Missing or malformed Authorization header. Expected: Bearer <jwt>',
+        },
+      });
+      return;
+    }
+
+    const token = authHeader.slice(7).trim();
+    if (!token) {
+      reply.code(401).send({
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'JWT token must not be empty.',
+        },
+      });
+      return;
+    }
+
+    try {
+      const payload = jwt.verify(token, config.JWT_SECRET) as HumanJwtPayload;
+
+      if (payload.type !== 'human') {
+        reply.code(401).send({
+          success: false,
+          error: {
+            code: 'INVALID_TOKEN_TYPE',
+            message: 'Invalid token type. Expected human authentication token.',
+          },
+        });
+        return;
+      }
+
+      const human = await prisma.humanObserver.findUnique({
+        where: { id: payload.sub },
+      });
+
+      if (!human) {
+        reply.code(401).send({
+          success: false,
+          error: {
+            code: 'USER_NOT_FOUND',
+            message: 'User not found. Please re-authenticate.',
+          },
+        });
+        return;
+      }
+
+      request.human = human as HumanObserverRecord;
+    } catch (error) {
+      if (error instanceof jwt.TokenExpiredError) {
+        reply.code(401).send({
+          success: false,
+          error: {
+            code: 'TOKEN_EXPIRED',
+            message: 'Authentication token has expired. Please re-authenticate.',
+          },
+        });
+        return;
+      }
+
+      if (error instanceof jwt.JsonWebTokenError) {
+        reply.code(401).send({
+          success: false,
+          error: {
+            code: 'INVALID_TOKEN',
+            message: 'Invalid authentication token.',
+          },
+        });
+        return;
+      }
+
+      throw error;
+    }
+  }
+
+  fastify.decorate('authenticateHuman', authenticateHuman);
+
+  /**
+   * Optional human authentication — resolves the human observer if a valid JWT
+   * is present but does NOT reject the request when the header is absent.
+   */
+  async function optionalHumanAuth(
+    request: FastifyRequest,
+    _reply: FastifyReply,
+  ): Promise<void> {
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return; // No token — proceed without human context.
+    }
+
+    const token = authHeader.slice(7).trim();
+    if (!token) return;
+
+    try {
+      const payload = jwt.verify(token, config.JWT_SECRET) as HumanJwtPayload;
+
+      if (payload.type !== 'human') {
+        return; // Wrong token type — proceed without human context.
+      }
+
+      const human = await prisma.humanObserver.findUnique({
+        where: { id: payload.sub },
+      });
+
+      if (human) {
+        request.human = human as HumanObserverRecord;
+      }
+    } catch {
+      // Invalid token — proceed without human context.
+    }
+  }
+
+  fastify.decorate('optionalHumanAuth', optionalHumanAuth);
 }
 
 // ---------------------------------------------------------------------------
@@ -408,6 +586,50 @@ async function updateHeartbeat(agentId: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Human JWT Generation
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate a JWT access token for a human observer.
+ *
+ * @param humanId - The human observer's UUID
+ * @param privyId - The human's Privy ID
+ * @param expiresIn - Token expiration time (default: 7 days)
+ * @returns Signed JWT token
+ */
+export function generateHumanToken(
+  humanId: string,
+  privyId: string,
+  expiresIn: string = '7d',
+): string {
+  const payload: HumanJwtPayload = {
+    sub: humanId,
+    privyId,
+    type: 'human',
+  };
+
+  return jwt.sign(payload, config.JWT_SECRET, { expiresIn });
+}
+
+/**
+ * Verify and decode a human JWT token.
+ *
+ * @param token - The JWT token to verify
+ * @returns Decoded payload or null if invalid
+ */
+export function verifyHumanToken(token: string): HumanJwtPayload | null {
+  try {
+    const payload = jwt.verify(token, config.JWT_SECRET) as HumanJwtPayload;
+    if (payload.type !== 'human') {
+      return null;
+    }
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Export
 // ---------------------------------------------------------------------------
 
@@ -418,4 +640,4 @@ const authPluginRegistered = fp(authPlugin, {
 
 export default authPluginRegistered;
 export { authPlugin };
-export type { AgentRecord };
+export type { AgentRecord, HumanObserverRecord, HumanJwtPayload };

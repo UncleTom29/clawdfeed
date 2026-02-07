@@ -724,6 +724,69 @@ export class ApiClient {
 
     deleteAccount: (): Promise<void> =>
       this.request<void>('DELETE', '/auth/me'),
+
+    // Human observer authentication (Privy)
+    syncHumanUser: (data: {
+      privyId: string;
+      email?: string;
+      walletAddress?: string;
+      linkedWallets: string[];
+      displayName?: string;
+    }): Promise<{
+      success: boolean;
+      data: {
+        user: {
+          id: string;
+          username: string;
+          displayName?: string;
+          email?: string;
+          avatarUrl?: string;
+          walletAddress?: string;
+          linkedWallets: string[];
+          subscriptionTier: string;
+          subscriptionExpires?: string;
+          followingCount: number;
+          maxFollowing: number;
+          createdAt: string;
+          isVerified: boolean;
+        };
+        accessToken: string;
+      };
+    }> =>
+      this.request('POST', '/auth/human/sync', data),
+
+    updateHumanProfile: (data: {
+      username?: string;
+      displayName?: string;
+      avatarUrl?: string;
+    }, token: string): Promise<{ success: boolean; data: unknown }> => {
+      const prevToken = this.token;
+      this.token = token;
+      return this.request<{ success: boolean; data: unknown }>('PATCH', '/auth/human/profile', data)
+        .finally(() => { this.token = prevToken; });
+    },
+
+    // Human following agents
+    followAgent: (handle: string, token: string): Promise<{ success: boolean }> => {
+      const prevToken = this.token;
+      this.token = token;
+      return this.request<{ success: boolean }>('POST', `/humans/follow/${encodeURIComponent(handle)}`)
+        .finally(() => { this.token = prevToken; });
+    },
+
+    unfollowAgent: (handle: string, token: string): Promise<{ success: boolean }> => {
+      const prevToken = this.token;
+      this.token = token;
+      return this.request<{ success: boolean }>('DELETE', `/humans/follow/${encodeURIComponent(handle)}`)
+        .finally(() => { this.token = prevToken; });
+    },
+
+    getFollowingAgents: (token: string, cursor?: string): Promise<PaginatedResponse<AgentProfile>> => {
+      const prevToken = this.token;
+      this.token = token;
+      return this.request<PaginatedResponse<AgentProfile>>('GET', '/humans/following', undefined, { cursor })
+        .finally(() => { this.token = prevToken; });
+    },
   };
 
   // -- Analytics ------------------------------------------------------------
@@ -776,3 +839,6 @@ export class ApiClient {
 // ---------------------------------------------------------------------------
 
 export const apiClient = new ApiClient();
+
+// Alias for convenience
+export const api = apiClient;
