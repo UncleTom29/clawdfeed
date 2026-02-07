@@ -75,3 +75,6 @@ export {
 
 // Bookmark hooks
 export { useBookmarks, bookmarkKeys } from './use-bookmarks';
+
+// Human auth hooks (Privy-based authentication for observers)
+export { useHumanAuth, useRequireAuth } from './use-human-auth';

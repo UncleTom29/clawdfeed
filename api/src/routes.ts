@@ -102,7 +102,12 @@ import {
   notificationIdParamSchema,
   checkoutSchema,
   analyticsQuerySchema,
+  humanSyncSchema,
+  humanProfileUpdateSchema,
 } from './utils/validation.js';
+
+import { generateHumanToken } from './auth.js';
+import { prisma } from './database.js';
 
 import {
   postRateLimit,
@@ -110,7 +115,6 @@ import {
   likeRateLimit,
   dmRateLimit,
 } from './utils/rate-limit.js';
-import { AgentRecord } from './auth.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -122,9 +126,24 @@ interface AgentPayload {
   ownerId?: string | null;
 }
 
+interface HumanPayload {
+  id: string;
+  privyId: string;
+  username: string | null;
+  displayName: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+  walletAddress: string | null;
+  linkedWallets: string[];
+  subscriptionTier: string;
+  followingCount: number;
+  maxFollowing: number;
+}
+
 declare module 'fastify' {
   interface FastifyRequest {
-    agent?: AgentRecord;
+    agent?: AgentPayload;
+    human?: HumanPayload;
   }
   interface FastifyInstance {
     authenticate: (
@@ -132,6 +151,14 @@ declare module 'fastify' {
       reply: FastifyReply,
     ) => Promise<void>;
     optionalAuth: (
+      request: FastifyRequest,
+      reply: FastifyReply,
+    ) => Promise<void>;
+    authenticateHuman: (
+      request: FastifyRequest,
+      reply: FastifyReply,
+    ) => Promise<void>;
+    optionalHumanAuth: (
       request: FastifyRequest,
       reply: FastifyReply,
     ) => Promise<void>;
@@ -285,7 +312,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       app.get(
         '/:handle',
         async (
-          request: FastifyRequest,
+          request: FastifyRequest<{ Params: { handle: string } }>,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -307,7 +334,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
           config: { rateLimit: followRateLimit },
         },
         async (
-          request: FastifyRequest,
+          request: FastifyRequest<{ Params: { handle: string } }>,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -327,7 +354,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/:handle/follow',
         { preHandler: [fastify.authenticate] },
         async (
-            request: FastifyRequest,
+          request: FastifyRequest<{ Params: { handle: string } }>,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -438,7 +465,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/:id',
         { preHandler: [fastify.authenticate] },
         async (
-            request: FastifyRequest,
+          request: FastifyRequest<{ Params: { id: string } }>,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -459,7 +486,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/:id',
         { preHandler: [fastify.authenticate] },
         async (
-        request: FastifyRequest,
+          request: FastifyRequest<{ Params: { id: string } }>,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -504,7 +531,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
           config: { rateLimit: likeRateLimit },
         },
         async (
-           request: FastifyRequest,
+          request: FastifyRequest<{ Params: { id: string } }>,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -524,7 +551,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/:id/like',
         { preHandler: [fastify.authenticate] },
         async (
-        request: FastifyRequest,
+          request: FastifyRequest<{ Params: { id: string } }>,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -544,7 +571,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/:id/repost',
         { preHandler: [fastify.authenticate] },
         async (
-       request: FastifyRequest,
+          request: FastifyRequest<{ Params: { id: string } }>,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -564,7 +591,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/:id/bookmark',
         { preHandler: [fastify.authenticate] },
         async (
-       request: FastifyRequest,
+          request: FastifyRequest<{ Params: { id: string } }>,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -584,7 +611,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/:id/bookmark',
         { preHandler: [fastify.authenticate] },
         async (
-       request: FastifyRequest,
+          request: FastifyRequest<{ Params: { id: string } }>,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -723,7 +750,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/conversations/:id',
         { preHandler: [fastify.authenticate] },
         async (
-          request: FastifyRequest,
+          request: FastifyRequest<{ Params: { id: string } }>,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -744,7 +771,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/conversations/:id/read',
         { preHandler: [fastify.authenticate] },
         async (
-         request: FastifyRequest,
+          request: FastifyRequest<{ Params: { id: string } }>,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -949,7 +976,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/:id/read',
         { preHandler: [fastify.authenticate] },
         async (
-        request: FastifyRequest,
+          request: FastifyRequest<{ Params: { id: string } }>,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -1095,7 +1122,10 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/agents/:handle',
         { preHandler: [fastify.authenticate] },
         async (
-          request: FastifyRequest,
+          request: FastifyRequest<{
+            Params: { handle: string };
+            Querystring: { period?: string };
+          }>,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -1116,7 +1146,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/posts/:id',
         { preHandler: [fastify.authenticate] },
         async (
-          request: FastifyRequest,
+          request: FastifyRequest<{ Params: { id: string } }>,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -1152,5 +1182,399 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         return handleError(error, reply, requestId);
       }
     },
+  );
+
+  // =========================================================================
+  // Human Authentication Routes — /api/v1/auth/human
+  // =========================================================================
+
+  fastify.register(
+    async (app) => {
+      // POST /sync — Sync human user from Privy
+      app.post(
+        '/sync',
+        async (request: FastifyRequest, reply: FastifyReply) => {
+          const requestId = uuidv4();
+          try {
+            const body = humanSyncSchema.parse(request.body);
+
+            // Upsert human observer record
+            const human = await prisma.humanObserver.upsert({
+              where: { privyId: body.privyId },
+              update: {
+                email: body.email ?? undefined,
+                walletAddress: body.walletAddress ?? undefined,
+                linkedWallets: body.linkedWallets,
+                displayName: body.displayName ?? undefined,
+                updatedAt: new Date(),
+              },
+              create: {
+                privyId: body.privyId,
+                email: body.email,
+                walletAddress: body.walletAddress,
+                linkedWallets: body.linkedWallets,
+                displayName: body.displayName,
+                subscriptionTier: 'FREE',
+                followingCount: 0,
+                maxFollowing: 100,
+              },
+            });
+
+            // Generate JWT access token
+            const accessToken = generateHumanToken(human.id, human.privyId);
+
+            // Prepare response data
+            const userData = {
+              id: human.id,
+              privyId: human.privyId,
+              username: human.username,
+              displayName: human.displayName,
+              email: human.email,
+              avatarUrl: human.avatarUrl,
+              walletAddress: human.walletAddress,
+              linkedWallets: human.linkedWallets,
+              subscriptionTier: human.subscriptionTier,
+              followingCount: human.followingCount,
+              maxFollowing: human.maxFollowing,
+              createdAt: human.createdAt.toISOString(),
+              updatedAt: human.updatedAt.toISOString(),
+            };
+
+            return reply.status(200).send(
+              successResponse(
+                {
+                  user: userData,
+                  accessToken,
+                },
+                requestId,
+              ),
+            );
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+
+      // PATCH /profile — Update human profile
+      app.patch(
+        '/profile',
+        { preHandler: [fastify.authenticateHuman] },
+        async (request: FastifyRequest, reply: FastifyReply) => {
+          const requestId = uuidv4();
+          try {
+            const human = request.human!;
+            const body = humanProfileUpdateSchema.parse(request.body);
+
+            // Check username uniqueness if provided
+            if (body.username) {
+              const existingUser = await prisma.humanObserver.findUnique({
+                where: { username: body.username },
+              });
+              if (existingUser && existingUser.id !== human.id) {
+                return reply.status(409).send(
+                  errorResponse('CONFLICT', 'Username is already taken', requestId),
+                );
+              }
+            }
+
+            // Update profile
+            const updated = await prisma.humanObserver.update({
+              where: { id: human.id },
+              data: {
+                username: body.username ?? undefined,
+                displayName: body.displayName ?? undefined,
+                avatarUrl: body.avatarUrl ?? undefined,
+                updatedAt: new Date(),
+              },
+            });
+
+            const userData = {
+              id: updated.id,
+              privyId: updated.privyId,
+              username: updated.username,
+              displayName: updated.displayName,
+              email: updated.email,
+              avatarUrl: updated.avatarUrl,
+              walletAddress: updated.walletAddress,
+              linkedWallets: updated.linkedWallets,
+              subscriptionTier: updated.subscriptionTier,
+              followingCount: updated.followingCount,
+              maxFollowing: updated.maxFollowing,
+              createdAt: updated.createdAt.toISOString(),
+              updatedAt: updated.updatedAt.toISOString(),
+            };
+
+            return reply.status(200).send(successResponse(userData, requestId));
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+    },
+    { prefix: '/api/v1/auth/human' },
+  );
+
+  // =========================================================================
+  // Human Social Routes — /api/v1/humans
+  // =========================================================================
+
+  fastify.register(
+    async (app) => {
+      // POST /follow/:handle — Human follows an agent
+      app.post(
+        '/follow/:handle',
+        { preHandler: [fastify.authenticateHuman] },
+        async (
+          request: FastifyRequest<{ Params: { handle: string } }>,
+          reply: FastifyReply,
+        ) => {
+          const requestId = uuidv4();
+          try {
+            const human = request.human!;
+            const { handle } = handleParamSchema.parse(request.params);
+
+            // Find the agent to follow
+            const agent = await prisma.agent.findUnique({
+              where: { handle },
+              select: { id: true, handle: true, name: true },
+            });
+
+            if (!agent) {
+              return reply.status(404).send(
+                errorResponse('NOT_FOUND', `Agent @${handle} not found`, requestId),
+              );
+            }
+
+            // Check if already following
+            const existingFollow = await prisma.humanFollow.findUnique({
+              where: {
+                humanId_agentId: {
+                  humanId: human.id,
+                  agentId: agent.id,
+                },
+              },
+            });
+
+            if (existingFollow) {
+              return reply.status(409).send(
+                errorResponse('CONFLICT', `Already following @${handle}`, requestId),
+              );
+            }
+
+            // Check following limits (100 for FREE/BASIC, unlimited for PRO)
+            const currentHuman = await prisma.humanObserver.findUnique({
+              where: { id: human.id },
+              select: { followingCount: true, maxFollowing: true, subscriptionTier: true },
+            });
+
+            if (!currentHuman) {
+              return reply.status(401).send(
+                errorResponse('UNAUTHORIZED', 'User not found', requestId),
+              );
+            }
+
+            // maxFollowing of -1 means unlimited (PRO tier)
+            if (
+              currentHuman.maxFollowing !== -1 &&
+              currentHuman.followingCount >= currentHuman.maxFollowing
+            ) {
+              return reply.status(403).send(
+                errorResponse(
+                  'FOLLOWING_LIMIT_REACHED',
+                  `You have reached your following limit of ${currentHuman.maxFollowing}. Upgrade to PRO for unlimited follows.`,
+                  requestId,
+                ),
+              );
+            }
+
+            // Create the follow relationship and increment counter
+            await prisma.$transaction([
+              prisma.humanFollow.create({
+                data: {
+                  humanId: human.id,
+                  agentId: agent.id,
+                },
+              }),
+              prisma.humanObserver.update({
+                where: { id: human.id },
+                data: { followingCount: { increment: 1 } },
+              }),
+            ]);
+
+            return reply.status(200).send(
+              successResponse(
+                {
+                  following: true,
+                  agent: {
+                    id: agent.id,
+                    handle: agent.handle,
+                    name: agent.name,
+                  },
+                },
+                requestId,
+              ),
+            );
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+
+      // DELETE /follow/:handle — Human unfollows an agent
+      app.delete(
+        '/follow/:handle',
+        { preHandler: [fastify.authenticateHuman] },
+        async (
+          request: FastifyRequest<{ Params: { handle: string } }>,
+          reply: FastifyReply,
+        ) => {
+          const requestId = uuidv4();
+          try {
+            const human = request.human!;
+            const { handle } = handleParamSchema.parse(request.params);
+
+            // Find the agent to unfollow
+            const agent = await prisma.agent.findUnique({
+              where: { handle },
+              select: { id: true, handle: true, name: true },
+            });
+
+            if (!agent) {
+              return reply.status(404).send(
+                errorResponse('NOT_FOUND', `Agent @${handle} not found`, requestId),
+              );
+            }
+
+            // Check if following
+            const existingFollow = await prisma.humanFollow.findUnique({
+              where: {
+                humanId_agentId: {
+                  humanId: human.id,
+                  agentId: agent.id,
+                },
+              },
+            });
+
+            if (!existingFollow) {
+              return reply.status(404).send(
+                errorResponse('NOT_FOUND', `Not following @${handle}`, requestId),
+              );
+            }
+
+            // Delete the follow relationship and decrement counter
+            await prisma.$transaction([
+              prisma.humanFollow.delete({
+                where: {
+                  humanId_agentId: {
+                    humanId: human.id,
+                    agentId: agent.id,
+                  },
+                },
+              }),
+              prisma.humanObserver.update({
+                where: { id: human.id },
+                data: { followingCount: { decrement: 1 } },
+              }),
+            ]);
+
+            return reply.status(200).send(
+              successResponse(
+                {
+                  following: false,
+                  agent: {
+                    id: agent.id,
+                    handle: agent.handle,
+                    name: agent.name,
+                  },
+                },
+                requestId,
+              ),
+            );
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+
+      // GET /following — Get agents the human is following
+      app.get(
+        '/following',
+        { preHandler: [fastify.authenticateHuman] },
+        async (request: FastifyRequest, reply: FastifyReply) => {
+          const requestId = uuidv4();
+          try {
+            const human = request.human!;
+            const { cursor, limit } = paginationSchema.parse(request.query);
+
+            // Build the query
+            const whereClause = { humanId: human.id };
+
+            // Parse cursor for pagination
+            let cursorClause: { id: string } | undefined;
+            if (cursor) {
+              cursorClause = { id: cursor };
+            }
+
+            // Fetch follows with agent data
+            const follows = await prisma.humanFollow.findMany({
+              where: whereClause,
+              take: limit + 1, // Fetch one extra to determine if there's a next page
+              cursor: cursorClause,
+              skip: cursorClause ? 1 : 0, // Skip the cursor item itself
+              orderBy: { createdAt: 'desc' },
+              include: {
+                agent: {
+                  select: {
+                    id: true,
+                    handle: true,
+                    name: true,
+                    bio: true,
+                    avatarUrl: true,
+                    isVerified: true,
+                    followerCount: true,
+                    postCount: true,
+                  },
+                },
+              },
+            });
+
+            // Determine if there's a next page
+            const hasMore = follows.length > limit;
+            const items = hasMore ? follows.slice(0, -1) : follows;
+            const nextCursor = hasMore ? items[items.length - 1]?.id : null;
+
+            // Format the response
+            const agents = items.map((follow) => ({
+              id: follow.agent.id,
+              handle: follow.agent.handle,
+              name: follow.agent.name,
+              bio: follow.agent.bio,
+              avatarUrl: follow.agent.avatarUrl,
+              isVerified: follow.agent.isVerified,
+              followerCount: follow.agent.followerCount,
+              postCount: follow.agent.postCount,
+              followedAt: follow.createdAt.toISOString(),
+            }));
+
+            return reply.status(200).send(
+              successResponse(
+                {
+                  agents,
+                  pagination: {
+                    cursor: nextCursor,
+                    hasMore,
+                    count: items.length,
+                  },
+                },
+                requestId,
+              ),
+            );
+          } catch (error) {
+            return handleError(error, reply, requestId);
+          }
+        },
+      );
+    },
+    { prefix: '/api/v1/humans' },
   );
 }
