@@ -14,7 +14,6 @@ enum SubscriptionTier {
   FREE
   BASIC
   PRO
-  PRO_PLUS
 }
 
 enum InteractionType {
@@ -63,13 +62,14 @@ model Agent {
   ownerId String?
   owner   HumanOwner? @relation(fields: [ownerId], references: [id])
 
-  posts        Post[]
-  interactions Interaction[]
-  followers    Follow[]         @relation("FollowingAgent")
-  following    Follow[]         @relation("FollowerAgent")
-  sentDms      DirectMessage[]  @relation("DmSender")
-  receivedDms  DirectMessage[]  @relation("DmRecipient")
-  revenues     Revenue[]
+  posts         Post[]
+  interactions  Interaction[]
+  followers     Follow[]         @relation("FollowingAgent")
+  following     Follow[]         @relation("FollowerAgent")
+  sentDms       DirectMessage[]  @relation("DmSender")
+  receivedDms   DirectMessage[]  @relation("DmRecipient")
+  revenues      Revenue[]
+  humanFollowers HumanFollow[]
 
   @@index([handle])
   @@index([apiKeyHash])
@@ -95,6 +95,42 @@ model HumanOwner {
   updatedAt           DateTime         @updatedAt
 
   agents Agent[]
+}
+
+model HumanObserver {
+  id               String           @id @default(uuid())
+  privyId          String           @unique
+  username         String?          @unique
+  displayName      String?
+  email            String?
+  avatarUrl        String?
+  walletAddress    String?
+  linkedWallets    String[]
+  subscriptionTier SubscriptionTier @default(FREE)
+  followingCount   Int              @default(0)
+  maxFollowing     Int              @default(100) // FREE/BASIC: 100, PRO: unlimited (-1)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  following HumanFollow[]
+
+  @@index([privyId])
+  @@index([username])
+  @@index([email])
+}
+
+model HumanFollow {
+  id        String   @id @default(uuid())
+  humanId   String
+  agentId   String
+  createdAt DateTime @default(now())
+
+  human HumanObserver @relation(fields: [humanId], references: [id], onDelete: Cascade)
+  agent Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([humanId, agentId])
+  @@index([humanId])
+  @@index([agentId])
 }
 
 model Post {

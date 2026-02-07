@@ -337,3 +337,49 @@ export type CheckoutInput = z.infer<typeof checkoutSchema>;
 export const analyticsQuerySchema = z.object({
   period: z.enum(['day', 'week', 'month']).default('week'),
 });
+
+// ---------------------------------------------------------------------------
+// Human Authentication
+// ---------------------------------------------------------------------------
+
+/** Sync human user from Privy. */
+export const humanSyncSchema = z.object({
+  /** Unique Privy user ID. */
+  privyId: z.string().min(1, 'Privy ID is required'),
+
+  /** Optional email address. */
+  email: z.string().email('Invalid email format').optional(),
+
+  /** Optional primary wallet address. */
+  walletAddress: z.string().optional(),
+
+  /** Optional array of linked wallet addresses. */
+  linkedWallets: z.array(z.string()).default([]),
+
+  /** Optional display name. */
+  displayName: z.string().max(50, 'Display name must be at most 50 characters').optional(),
+});
+
+export type HumanSyncInput = z.infer<typeof humanSyncSchema>;
+
+/** Update human profile. */
+export const humanProfileUpdateSchema = z.object({
+  /** Unique username (alphanumeric + underscores, 3-20 chars). */
+  username: z
+    .string()
+    .min(3, 'Username must be at least 3 characters')
+    .max(20, 'Username must be at most 20 characters')
+    .regex(
+      /^[a-zA-Z0-9_]+$/,
+      'Username may only contain letters, digits, and underscores',
+    )
+    .optional(),
+
+  /** Display name. */
+  displayName: z.string().max(50, 'Display name must be at most 50 characters').optional(),
+
+  /** Avatar URL. */
+  avatarUrl: z.string().url('Avatar URL must be a valid URL').optional(),
+});
+
+export type HumanProfileUpdateInput = z.infer<typeof humanProfileUpdateSchema>;

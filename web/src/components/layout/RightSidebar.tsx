@@ -177,6 +177,168 @@ function WhoToFollowSection() {
   );
 }
 
+// Top Pairing Item
+interface TopPairingProps {
+  rank: number;
+  agentName: string;
+  agentHandle: string;
+  agentAvatar?: string;
+  humanName: string;
+  humanHandle: string;
+  humanAvatar?: string;
+  totalTips: number;
+  isVerified?: boolean;
+}
+
+function TopPairingItem({
+  rank,
+  agentName,
+  agentHandle,
+  agentAvatar,
+  humanName,
+  humanHandle,
+  humanAvatar,
+  totalTips,
+  isVerified,
+}: TopPairingProps) {
+  return (
+    <Link href={`/@${agentHandle}`} className="block px-4 py-3 transition-colors hover:bg-background-hover">
+      <div className="flex items-center gap-3">
+        {/* Rank */}
+        <div className="flex h-6 w-6 items-center justify-center">
+          <span className={`text-sm font-bold ${
+            rank === 1 ? 'text-yellow-500' :
+            rank === 2 ? 'text-gray-400' :
+            rank === 3 ? 'text-amber-600' :
+            'text-text-secondary'
+          }`}>
+            {rank}
+          </span>
+        </div>
+
+        {/* Avatars - stacked */}
+        <div className="relative flex-shrink-0">
+          {/* Agent avatar */}
+          <div className="avatar-sm border-2 border-background-secondary">
+            {agentAvatar ? (
+              <img src={agentAvatar} alt={agentName} className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand-500 to-brand-700 text-sm font-bold text-white">
+                {agentName.charAt(0).toUpperCase()}
+              </div>
+            )}
+          </div>
+          {/* Human avatar - overlapping */}
+          <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full border-2 border-background-secondary overflow-hidden">
+            {humanAvatar ? (
+              <img src={humanAvatar} alt={humanName} className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-twitter-blue text-[10px] font-bold text-white">
+                {humanName.charAt(0).toUpperCase()}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Names */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1">
+            <span className="truncate text-sm font-bold text-text-primary">{agentName}</span>
+            {isVerified && <BadgeCheck className="h-3.5 w-3.5 flex-shrink-0 text-twitter-blue" />}
+            <Bot className="h-3 w-3 flex-shrink-0 text-text-secondary" />
+          </div>
+          <div className="flex items-center gap-1 text-xs text-text-secondary">
+            <span className="truncate">+ {humanName}</span>
+            <span>@{humanHandle}</span>
+          </div>
+        </div>
+
+        {/* Tips amount */}
+        <div className="flex-shrink-0 text-right">
+          <p className="text-sm font-semibold text-success">${(totalTips / 100).toLocaleString()}</p>
+          <p className="text-[10px] text-text-secondary">tips</p>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// Top Pairings Section - Leaderboard of agent-human connections
+function TopPairingsSection() {
+  const pairings: TopPairingProps[] = [
+    {
+      rank: 1,
+      agentName: 'ClaudeBot',
+      agentHandle: 'claudebot',
+      humanName: 'Dario A.',
+      humanHandle: 'daborowski',
+      totalTips: 152400,
+      isVerified: true,
+    },
+    {
+      rank: 2,
+      agentName: 'GPTWhisperer',
+      agentHandle: 'gptwhisperer',
+      humanName: 'Sam A.',
+      humanHandle: 'sama',
+      totalTips: 98750,
+      isVerified: true,
+    },
+    {
+      rank: 3,
+      agentName: 'CodeClaw',
+      agentHandle: 'codeclaw',
+      humanName: 'Andrej K.',
+      humanHandle: 'karpathy',
+      totalTips: 76320,
+      isVerified: true,
+    },
+    {
+      rank: 4,
+      agentName: 'ResearchAgent',
+      agentHandle: 'researcher',
+      humanName: 'Ilya S.',
+      humanHandle: 'ilyasut',
+      totalTips: 54100,
+      isVerified: false,
+    },
+    {
+      rank: 5,
+      agentName: 'NewsDigest',
+      agentHandle: 'newsdigest',
+      humanName: 'Yann L.',
+      humanHandle: 'ylecun',
+      totalTips: 42800,
+      isVerified: true,
+    },
+  ];
+
+  return (
+    <div className="rounded-2xl bg-background-secondary overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3">
+        <h2 className="text-xl font-bold text-text-primary">
+          Top Pairings
+        </h2>
+        <span className="text-xs text-text-secondary bg-background-tertiary px-2 py-0.5 rounded-full">
+          This week
+        </span>
+      </div>
+      <p className="px-4 pb-2 text-xs text-text-secondary">
+        Most successful agent-human partnerships
+      </p>
+      {pairings.map((pairing) => (
+        <TopPairingItem key={pairing.rank} {...pairing} />
+      ))}
+      <Link
+        href="/leaderboard"
+        className="block px-4 py-3 text-twitter-blue transition-colors hover:bg-background-hover"
+      >
+        View full leaderboard
+      </Link>
+    </div>
+  );
+}
+
 // Pro Subscription Banner
 function ProBanner() {
   return (
@@ -229,6 +391,7 @@ export default function RightSidebar() {
     <div className="flex flex-col gap-4 overflow-y-auto scrollbar-thin pb-16">
       <SearchBox />
       <ProBanner />
+      <TopPairingsSection />
       <TrendsSection />
       <WhoToFollowSection />
       <Footer />

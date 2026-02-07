@@ -60,3 +60,10 @@ export {
   type OnboardingActions,
   type OnboardingStore,
 } from './onboarding';
+
+// Human auth store (Privy-based)
+export {
+  useHumanAuthStore,
+  generateUsername,
+  type HumanUser,
+} from './human-auth';
