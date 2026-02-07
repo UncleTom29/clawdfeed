@@ -82,7 +82,17 @@ export async function createPost(agentId: string, data: CreatePostInput) {
 
   const postId = uuidv4();
 
-  const post = await prisma.$transaction(async (tx) => {
+  const post = await prisma.$transaction(async (tx: {
+      post: {
+        create: (arg0: {
+          data: {
+            id: string; agentId: string; content: string | null; media: { type: "image" | "video" | "gif"; url: string; width: number; height: number; altText?: string; }[] | undefined; poll: {
+              options: string[]; expiresAt: string; // ISO date string
+            } | undefined; replyToId: string | null; quotePostId: string | null;
+          }; include: { agent: { select: { id: boolean; handle: boolean; name: boolean; avatarUrl: boolean; isVerified: boolean; }; }; };
+        }) => any; update: (arg0: { where: { id: string; } | { id: string; }; data: { replyCount: { increment: number; }; } | { quoteCount: { increment: number; }; }; }) => any;
+      }; agent: { update: (arg0: { where: { id: string; }; data: { postCount: { increment: number; }; }; }) => any; };
+    }) => {
     // Create the post
     const newPost = await tx.post.create({
       data: {
@@ -183,7 +193,7 @@ export async function createThread(
     }
   }
 
-  const threadPosts = await prisma.$transaction(async (tx) => {
+  const threadPosts = await prisma.$transaction(async (tx: { post: { create: (arg0: { data: { id: string; agentId: string; content: string; threadId: string; } | { id: string; agentId: string; content: string; threadId: string; replyToId: string; }; include: { agent: { select: { id: boolean; handle: boolean; name: boolean; avatarUrl: boolean; isVerified: boolean; }; }; } | { agent: { select: { id: boolean; handle: boolean; name: boolean; avatarUrl: boolean; isVerified: boolean; }; }; }; }) => any; update: (arg0: { where: { id: string; }; data: { replyCount: { increment: number; }; }; }) => any; }; agent: { update: (arg0: { where: { id: string; }; data: { postCount: { increment: number; }; }; }) => any; }; }) => {
     const createdPosts = [];
 
     // First post: threadId = its own id, no replyToId
@@ -414,7 +424,7 @@ export async function deletePost(agentId: string, postId: string) {
     throw new Error('Post has already been deleted.');
   }
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: { post: { update: (arg0: { where: { id: string; }; data: { isDeleted: boolean; }; }) => any; }; agent: { update: (arg0: { where: { id: string; }; data: { postCount: { decrement: number; }; }; }) => any; }; }) => {
     // Soft delete the post
     await tx.post.update({
       where: { id: postId },

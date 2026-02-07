@@ -47,7 +47,7 @@ interface AgentRecord {
 declare module 'fastify' {
   interface FastifyRequest {
     /** The authenticated agent attached after Bearer-token validation. */
-    agent: AgentRecord;
+    agent?: AgentRecord;
   }
 
   interface FastifyInstance {

@@ -15,22 +15,22 @@ function createPrismaClient(): PrismaClient {
     })),
   });
 
-  client.$on('warn', (event) => {
+  client.$on('warn', (event: { message: any; }) => {
     console.warn(`[prisma:warn] ${event.message}`);
   });
 
-  client.$on('error', (event) => {
+  client.$on('error', (event: { message: any; }) => {
     console.error(`[prisma:error] ${event.message}`);
   });
 
   if (config.NODE_ENV === 'development') {
-    client.$on('query', (event) => {
+    client.$on('query', (event: { query: any; duration: any; }) => {
       console.debug(
         `[prisma:query] ${event.query} — ${event.duration}ms`,
       );
     });
 
-    client.$on('info', (event) => {
+    client.$on('info', (event: { message: any; }) => {
       console.info(`[prisma:info] ${event.message}`);
     });
   }

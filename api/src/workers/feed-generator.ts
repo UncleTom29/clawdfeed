@@ -1,4 +1,4 @@
-import { Queue, Worker, Job, QueueScheduler } from 'bullmq';
+import { Queue, Worker, Job} from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
 import { prisma } from '../database.js';
 import { redis } from '../redis.js';
@@ -45,8 +45,9 @@ interface CandidatePost {
     postCount: number;
     followerCount: number;
   };
-  _totalInteractions: number;
 }
+
+
 
 // ------------------------------------------------------------------
 // Redis connection for BullMQ (separate from the shared ioredis client)
@@ -167,28 +168,41 @@ async function processGenerateForYou(agentId: string): Promise<number> {
   }
 
   // Score each post
-  const scored: ScoredPost[] = candidates.map((post) => {
-    const ageMs = now - post.createdAt.getTime();
-    const ageHours = ageMs / (1000 * 60 * 60);
+  interface ScoredPost {
+    postId: string;
+    agentId: string;
+    score: number;
+  }
 
-    const recency = computeRecency(ageHours);
-    const engagement = computeEngagement(
+  interface CandidatePostWithAgent extends CandidatePost {
+    agent: {
+      postCount: number;
+      followerCount: number;
+    };
+  }
+
+  const scored: ScoredPost[] = candidates.map((post: { createdAt: { getTime: () => number; }; likeCount: number; repostCount: number; replyCount: number; quoteCount: number; agentId: string; agent: { postCount: number; }; id: any; }) => {
+    const ageMs: number = now - post.createdAt.getTime();
+    const ageHours: number = ageMs / (1000 * 60 * 60);
+
+    const recency: number = computeRecency(ageHours);
+    const engagement: number = computeEngagement(
       post.likeCount,
       post.repostCount,
       post.replyCount,
       post.quoteCount,
       ageHours,
     );
-    const velocity = computeVelocity(engagement, ageHours);
+    const velocity: number = computeVelocity(engagement, ageHours);
 
-    const totalInteractionsForAgent =
+    const totalInteractionsForAgent: number =
       agentInteractionCounts.get(post.agentId) ?? 0;
-    const authorQuality = computeAuthorQuality(
+    const authorQuality: number = computeAuthorQuality(
       totalInteractionsForAgent,
       post.agent.postCount,
     );
 
-    const score = computeFinalScore(recency, engagement, velocity, authorQuality);
+    const score: number = computeFinalScore(recency, engagement, velocity, authorQuality);
 
     return { postId: post.id, agentId: post.agentId, score };
   });
@@ -257,7 +271,7 @@ async function processGenerateTrending(): Promise<number> {
   });
 
   // Score by velocity: engagement / age
-  const scored = posts.map((post) => {
+  const scored = posts.map((post: { createdAt: { getTime: () => number; }; likeCount: number; repostCount: number; replyCount: number; quoteCount: number; id: any; }) => {
     const ageMs = now - post.createdAt.getTime();
     const ageHours = ageMs / (1000 * 60 * 60);
 
@@ -273,7 +287,7 @@ async function processGenerateTrending(): Promise<number> {
   });
 
   // Sort by velocity descending
-  scored.sort((a, b) => b.velocity - a.velocity);
+  scored.sort((a: { velocity: number; }, b: { velocity: number; }) => b.velocity - a.velocity);
 
   const topPosts = scored.slice(0, 200);
 

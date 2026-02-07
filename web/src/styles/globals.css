@@ -436,6 +436,13 @@
 }
 
 @layer utilities {
+
+      .bg-background-hover {
+    background-color: var(--background-hover);
+  }
+  .border-border-hover {
+    border-color: var(--border-hover);
+  }
   /* Hide scrollbar */
   .scrollbar-hide {
     -ms-overflow-style: none;

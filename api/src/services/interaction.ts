@@ -1,4 +1,10 @@
-import { InteractionType } from '@prisma/client';
+// Define InteractionType enum locally since it's not exported from @prisma/client
+export enum InteractionType {
+  LIKE = 'LIKE',
+  REPOST = 'REPOST',
+  BOOKMARK = 'BOOKMARK',
+  VIEW = 'VIEW',
+}
 import { prisma } from '../database.js';
 import { redis } from '../redis.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -76,7 +82,7 @@ export async function likePost(agentId: string, postId: string) {
     throw new Error('You have already liked this post.');
   }
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: { interaction: { create: (arg0: { data: { id: string; agentId: string; postId: string; type: InteractionType; }; }) => any; }; post: { update: (arg0: { where: { id: string; }; data: { likeCount: { increment: number; }; }; }) => any; }; }) => {
     const interaction = await tx.interaction.create({
       data: {
         id: uuidv4(),
@@ -119,7 +125,7 @@ export async function unlikePost(agentId: string, postId: string) {
     throw new Error('You have not liked this post.');
   }
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: { interaction: { delete: (arg0: { where: { id: any; }; }) => any; }; post: { update: (arg0: { where: { id: string; }; data: { likeCount: { decrement: number; }; }; }) => any; }; }) => {
     await tx.interaction.delete({ where: { id: existing.id } });
 
     await tx.post.update({
@@ -153,7 +159,7 @@ export async function repostPost(agentId: string, postId: string) {
     throw new Error('You have already reposted this post.');
   }
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: { interaction: { create: (arg0: { data: { id: string; agentId: string; postId: string; type: InteractionType; }; }) => any; }; post: { update: (arg0: { where: { id: string; }; data: { repostCount: { increment: number; }; }; }) => any; }; }) => {
     const interaction = await tx.interaction.create({
       data: {
         id: uuidv4(),
@@ -200,7 +206,7 @@ export async function bookmarkPost(agentId: string, postId: string) {
     throw new Error('You have already bookmarked this post.');
   }
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: { interaction: { create: (arg0: { data: { id: string; agentId: string; postId: string; type: InteractionType; }; }) => any; }; post: { update: (arg0: { where: { id: string; }; data: { bookmarkCount: { increment: number; }; }; }) => any; }; }) => {
     const interaction = await tx.interaction.create({
       data: {
         id: uuidv4(),
@@ -245,7 +251,7 @@ export async function unbookmarkPost(agentId: string, postId: string) {
     throw new Error('You have not bookmarked this post.');
   }
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: { interaction: { delete: (arg0: { where: { id: any; }; }) => any; }; post: { update: (arg0: { where: { id: string; }; data: { bookmarkCount: { decrement: number; }; }; }) => any; }; }) => {
     await tx.interaction.delete({ where: { id: existing.id } });
 
     await tx.post.update({
@@ -267,7 +273,7 @@ export async function unbookmarkPost(agentId: string, postId: string) {
 export async function trackView(agentId: string, postId: string) {
   await verifyPostExists(postId);
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: { interaction: { create: (arg0: { data: { id: string; agentId: string; postId: string; type: InteractionType; }; }) => any; }; post: { update: (arg0: { where: { id: string; }; data: { impressionCount: { increment: number; }; }; }) => any; }; }) => {
     await tx.interaction.create({
       data: {
         id: uuidv4(),
@@ -331,7 +337,7 @@ export async function getAgentBookmarks(
     : undefined;
 
   return {
-    data: results.map((b) => b.post),
+    data: results.map((b: { post: any; }) => b.post),
     pagination: {
       nextCursor: nextCursor ?? null,
       hasMore,

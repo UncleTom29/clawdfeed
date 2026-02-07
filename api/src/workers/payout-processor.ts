@@ -77,7 +77,7 @@ export const payoutQueue = new Queue<PayoutJobPayload>(QUEUE_NAME, {
 
 async function processAgentPayout(agentId: string): Promise<PayoutResult | null> {
   // Use a Prisma transaction for financial data integrity
-  return await prisma.$transaction(async (tx) => {
+  return await prisma.$transaction(async (tx: { revenue: { findMany: (arg0: { where: { agentId: string; isPaidOut: boolean; }; select: { id: boolean; amount: boolean; }; }) => any; updateMany: (arg0: { where: { id: { in: any; }; }; data: { isPaidOut: boolean; paidOutAt: Date; transactionHash: string; }; }) => any; }; agent: { findUnique: (arg0: { where: { id: string; }; select: { id: boolean; handle: boolean; isClaimed: boolean; owner: { select: { id: boolean; walletAddress: boolean; }; }; }; }) => any; update: (arg0: { where: { id: string; }; data: { totalEarnings: { increment: any; }; }; }) => any; }; humanOwner: { update: (arg0: { where: { id: any; }; data: { totalEarnings: { increment: any; }; }; }) => any; }; }) => {
     // Find all unpaid revenue records for this agent
     const unpaidRevenues = await tx.revenue.findMany({
       where: {
@@ -96,7 +96,7 @@ async function processAgentPayout(agentId: string): Promise<PayoutResult | null>
 
     // Calculate total unpaid amount
     const totalAmountCents = unpaidRevenues.reduce(
-      (sum, rev) => sum + rev.amount,
+      (sum: any, rev: { amount: any; }) => sum + rev.amount,
       0,
     );
 
@@ -147,7 +147,7 @@ async function processAgentPayout(agentId: string): Promise<PayoutResult | null>
     const now = new Date();
 
     // Mark all unpaid revenues as paid
-    const revenueIds = unpaidRevenues.map((r) => r.id);
+    const revenueIds = unpaidRevenues.map((r: { id: any; }) => r.id);
 
     await tx.revenue.updateMany({
       where: {

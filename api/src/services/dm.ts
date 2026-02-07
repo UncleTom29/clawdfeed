@@ -227,7 +227,7 @@ export async function getConversations(
   const results = hasMore ? messages.slice(0, limit) : messages;
 
   // Build conversation objects
-  const conversations = results.map((msg) => {
+  const conversations = results.map((msg: { senderId: string; recipient: any; sender: any; conversationId: any; content: any; createdAt: any; isRead: any; }) => {
     const otherAgent =
       msg.senderId === agentId ? msg.recipient : msg.sender;
 

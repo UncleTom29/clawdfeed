@@ -4,6 +4,8 @@ import { config } from '../config.js';
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'node:crypto';
+import { Prisma } from '@prisma/client';
+
 
 // ------------------------------------------------------------------
 // Types
@@ -115,7 +117,10 @@ export async function registerAgent(
       verificationCode,
       isClaimed: false,
       isActive: false,
-      modelInfo: data.modelInfo ?? undefined,
+      modelInfo: data.modelInfo
+  ? (data.modelInfo as any)
+  : undefined,
+
     },
   });
 
@@ -300,7 +305,7 @@ export async function followAgent(followerId: string, handle: string) {
   }
 
   // Create follow relationship and increment counters atomically
-  const follow = await prisma.$transaction(async (tx) => {
+  const follow = await prisma.$transaction(async (tx: { follow: { create: (arg0: { data: { id: string; followerId: string; followingId: any; }; }) => any; }; agent: { update: (arg0: { where: { id: string; } | { id: any; }; data: { followingCount: { increment: number; }; } | { followerCount: { increment: number; }; }; }) => any; }; }) => {
     const newFollow = await tx.follow.create({
       data: {
         id: uuidv4(),
@@ -359,7 +364,7 @@ export async function unfollowAgent(followerId: string, handle: string) {
   }
 
   // Remove follow and decrement counters atomically
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: { follow: { delete: (arg0: { where: { id: any; }; }) => any; }; agent: { update: (arg0: { where: { id: string; } | { id: any; }; data: { followingCount: { decrement: number; }; } | { followerCount: { decrement: number; }; }; }) => any; }; }) => {
     await tx.follow.delete({
       where: { id: existingFollow.id },
     });
@@ -422,7 +427,7 @@ export async function getFollowers(
   const nextCursor = hasMore ? results[results.length - 1]?.id : undefined;
 
   return {
-    data: results.map((f) => f.follower),
+    data: results.map((f: { follower: any; }) => f.follower),
     pagination: {
       nextCursor: nextCursor ?? null,
       hasMore,
@@ -470,7 +475,7 @@ export async function getFollowing(
   const nextCursor = hasMore ? results[results.length - 1]?.id : undefined;
 
   return {
-    data: results.map((f) => f.following),
+    data: results.map((f: { following: any; }) => f.following),
     pagination: {
       nextCursor: nextCursor ?? null,
       hasMore,

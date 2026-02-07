@@ -1,4 +1,11 @@
-import { Prisma, RevenueType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+
+/** Revenue types as defined in the Prisma schema. */
+export enum RevenueType {
+  AD_IMPRESSION = 'AD_IMPRESSION',
+  TIP = 'TIP',
+  REFERRAL = 'REFERRAL',
+}
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../database.js';
 import { redis } from '../redis.js';
@@ -226,7 +233,7 @@ export async function trackAdImpression(
   const platformShare = Math.floor(revenue * PLATFORM_SHARE);
   const ownerShare = Math.floor(revenue * OWNER_SHARE);
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: { revenue: { create: (arg0: { data: { agentId: string; type: RevenueType; amount: number; postId: string; }; }) => any; }; agent: { update: (arg0: { where: { id: string; }; data: { totalEarnings: { increment: number; }; }; }) => any; }; humanOwner: { update: (arg0: { where: { id: any; }; data: { totalEarnings: { increment: number; }; }; }) => any; }; }) => {
     // 1. Create Revenue record for the agent's share.
     const revenueRecord = await tx.revenue.create({
       data: {
@@ -329,7 +336,7 @@ export async function processTip(
   }
 
   // Persist the tip revenue in a transaction.
-  const revenueRecord = await prisma.$transaction(async (tx) => {
+  const revenueRecord = await prisma.$transaction(async (tx: { revenue: { create: (arg0: { data: { agentId: any; type: RevenueType; amount: number; postId: string | null; tipperId: string; }; }) => any; }; agent: { update: (arg0: { where: { id: any; }; data: { totalEarnings: { increment: number; }; }; }) => any; }; }) => {
     const rev = await tx.revenue.create({
       data: {
         agentId: agent.id,
@@ -500,7 +507,7 @@ export async function processWeeklyPayouts(): Promise<WeeklyPayoutSummary> {
     try {
       const transactionHash = generateMockTransactionHash();
 
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: { revenue: { updateMany: (arg0: { where: { agentId: any; isPaidOut: boolean; }; data: { isPaidOut: boolean; paidOutAt: Date; transactionHash: string; }; }) => any; }; }) => {
         // Mark all unpaid revenues for this agent as paid.
         await tx.revenue.updateMany({
           where: {
@@ -647,7 +654,7 @@ export async function getEarnings(agentId: string): Promise<EarningsSummary> {
     },
   });
 
-  const recentTransactions: RecentTransaction[] = recent.map((r) => ({
+  const recentTransactions: RecentTransaction[] = recent.map((r: { id: any; type: any; amount: any; postId: any; tipperId: any; isPaidOut: any; paidOutAt: any; transactionHash: any; createdAt: any; }) => ({
     id: r.id,
     type: r.type,
     amount: r.amount,
@@ -739,7 +746,7 @@ export async function getReferralStats(
     },
   });
 
-  const recentReferrals: RecentTransaction[] = recent.map((r) => ({
+  const recentReferrals: RecentTransaction[] = recent.map((r: { id: any; type: any; amount: any; postId: any; tipperId: any; isPaidOut: any; paidOutAt: any; transactionHash: any; createdAt: any; }) => ({
     id: r.id,
     type: r.type,
     amount: r.amount,

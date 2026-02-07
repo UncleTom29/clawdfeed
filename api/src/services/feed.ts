@@ -163,12 +163,12 @@ export async function forYouFeed(
 
   // Score and sort
   const scored = candidates
-    .map((post) => ({ post, score: scoreFeedPost(post) }))
-    .sort((a, b) => b.score - a.score);
+    .map((post: { createdAt: Date; likeCount: number; repostCount: number; replyCount: number; quoteCount: number; agent: { postCount?: number; followerCount?: number; } | null; }) => ({ post, score: scoreFeedPost(post) }))
+    .sort((a: { score: number; }, b: { score: number; }) => b.score - a.score);
 
   // Diversify
   const diversified = diversify(
-    scored.map((s) => s.post),
+    scored.map((s: { post: any; }) => s.post),
     2,
   );
 
@@ -184,7 +184,7 @@ export async function forYouFeed(
   const page = diversified.slice(0, limit + 1);
   const hasMore = page.length > limit;
   const results = hasMore ? page.slice(0, limit) : page;
-  const nextCursor = hasMore ? results[results.length - 1]?.id ?? null : null;
+  const nextCursor = hasMore ? results[results.length - 1]?.agentId ?? null : null;
 
   return {
     data: results,
@@ -211,7 +211,7 @@ export async function followingFeed(
     select: { followingId: true },
   });
 
-  const followingIds = follows.map((f) => f.followingId);
+  const followingIds = follows.map((f: { followingId: any; }) => f.followingId);
 
   if (followingIds.length === 0) {
     return { data: [], pagination: { nextCursor: null, hasMore: false } };
@@ -230,7 +230,17 @@ export async function followingFeed(
     where,
     take: limit + 1,
     orderBy: { createdAt: 'desc' },
-    include: POST_INCLUDE,
+    select: {
+      id: true,
+      agentId: true,
+      createdAt: true,
+      content: true,
+      likeCount: true,
+      repostCount: true,
+      replyCount: true,
+      quoteCount: true,
+      ...POST_INCLUDE,
+    },
   });
 
   const hasMore = posts.length > limit;
@@ -281,7 +291,7 @@ export async function trendingFeed(
 
   // Sort by velocity (engagement / age)
   const sorted = posts
-    .map((post) => {
+    .map((post: { createdAt: { getTime: () => number; }; likeCount: number; repostCount: number; replyCount: number; }) => {
       const ageHours =
         (Date.now() - post.createdAt.getTime()) / (1000 * 60 * 60);
       const engagement =
@@ -289,14 +299,14 @@ export async function trendingFeed(
       const velocity = engagement / Math.max(ageHours, 0.5);
       return { post, velocity };
     })
-    .sort((a, b) => b.velocity - a.velocity)
-    .map((s) => s.post);
+    .sort((a: { velocity: number; }, b: { velocity: number; }) => b.velocity - a.velocity)
+    .map((s: { post: any; }) => s.post);
 
   const diversified = diversify(sorted, 2);
   const page = diversified.slice(0, limit + 1);
   const hasMore = page.length > limit;
   const results = hasMore ? page.slice(0, limit) : page;
-  const nextCursor = hasMore ? results[results.length - 1]?.id ?? null : null;
+  const nextCursor = hasMore ? results[results.length - 1]?.agentId ?? null : null;
 
   return {
     data: results,
@@ -334,20 +344,20 @@ export async function exploreFeed(
 
   // Mix: score by engagement + some randomness
   const scored = posts
-    .map((post) => {
+    .map((post: { likeCount: number; repostCount: number; replyCount: number; }) => {
       const engagement =
         post.likeCount + post.repostCount * 2 + post.replyCount * 3;
       const randomBoost = Math.random() * 5;
       return { post, score: engagement + randomBoost };
     })
-    .sort((a, b) => b.score - a.score)
-    .map((s) => s.post);
+    .sort((a: { score: number; }, b: { score: number; }) => b.score - a.score)
+    .map((s: { post: any; }) => s.post);
 
   const diversified = diversify(scored, 2);
   const page = diversified.slice(0, limit + 1);
   const hasMore = page.length > limit;
   const results = hasMore ? page.slice(0, limit) : page;
-  const nextCursor = hasMore ? results[results.length - 1]?.id ?? null : null;
+  const nextCursor = hasMore ? results[results.length - 1]?.agentId ?? null : null;
 
   return {
     data: results,

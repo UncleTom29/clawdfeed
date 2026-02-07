@@ -110,6 +110,7 @@ import {
   likeRateLimit,
   dmRateLimit,
 } from './utils/rate-limit.js';
+import { AgentRecord } from './auth.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -123,7 +124,7 @@ interface AgentPayload {
 
 declare module 'fastify' {
   interface FastifyRequest {
-    agent?: AgentPayload;
+    agent?: AgentRecord;
   }
   interface FastifyInstance {
     authenticate: (
@@ -284,7 +285,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
       app.get(
         '/:handle',
         async (
-          request: FastifyRequest<{ Params: { handle: string } }>,
+          request: FastifyRequest,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -306,7 +307,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
           config: { rateLimit: followRateLimit },
         },
         async (
-          request: FastifyRequest<{ Params: { handle: string } }>,
+          request: FastifyRequest,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -326,7 +327,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/:handle/follow',
         { preHandler: [fastify.authenticate] },
         async (
-          request: FastifyRequest<{ Params: { handle: string } }>,
+            request: FastifyRequest,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -437,7 +438,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/:id',
         { preHandler: [fastify.authenticate] },
         async (
-          request: FastifyRequest<{ Params: { id: string } }>,
+            request: FastifyRequest,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -458,7 +459,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/:id',
         { preHandler: [fastify.authenticate] },
         async (
-          request: FastifyRequest<{ Params: { id: string } }>,
+        request: FastifyRequest,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -503,7 +504,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
           config: { rateLimit: likeRateLimit },
         },
         async (
-          request: FastifyRequest<{ Params: { id: string } }>,
+           request: FastifyRequest,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -523,7 +524,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/:id/like',
         { preHandler: [fastify.authenticate] },
         async (
-          request: FastifyRequest<{ Params: { id: string } }>,
+        request: FastifyRequest,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -543,7 +544,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/:id/repost',
         { preHandler: [fastify.authenticate] },
         async (
-          request: FastifyRequest<{ Params: { id: string } }>,
+       request: FastifyRequest,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -563,7 +564,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/:id/bookmark',
         { preHandler: [fastify.authenticate] },
         async (
-          request: FastifyRequest<{ Params: { id: string } }>,
+       request: FastifyRequest,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -583,7 +584,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/:id/bookmark',
         { preHandler: [fastify.authenticate] },
         async (
-          request: FastifyRequest<{ Params: { id: string } }>,
+       request: FastifyRequest,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -722,7 +723,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/conversations/:id',
         { preHandler: [fastify.authenticate] },
         async (
-          request: FastifyRequest<{ Params: { id: string } }>,
+          request: FastifyRequest,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -743,7 +744,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/conversations/:id/read',
         { preHandler: [fastify.authenticate] },
         async (
-          request: FastifyRequest<{ Params: { id: string } }>,
+         request: FastifyRequest,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -948,7 +949,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/:id/read',
         { preHandler: [fastify.authenticate] },
         async (
-          request: FastifyRequest<{ Params: { id: string } }>,
+        request: FastifyRequest,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -1094,10 +1095,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/agents/:handle',
         { preHandler: [fastify.authenticate] },
         async (
-          request: FastifyRequest<{
-            Params: { handle: string };
-            Querystring: { period?: string };
-          }>,
+          request: FastifyRequest,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
@@ -1118,7 +1116,7 @@ export async function registerRoutes(fastify: FastifyInstance): Promise<void> {
         '/posts/:id',
         { preHandler: [fastify.authenticate] },
         async (
-          request: FastifyRequest<{ Params: { id: string } }>,
+          request: FastifyRequest,
           reply: FastifyReply,
         ) => {
           const requestId = uuidv4();
